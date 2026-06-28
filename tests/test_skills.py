@@ -1,6 +1,5 @@
 """Tests for the skills system."""
 
-import textwrap
 from pathlib import Path
 
 import pytest
@@ -8,7 +7,9 @@ import pytest
 from corecoder.skills import (
     Skill,
     discover_skills,
-    format_skills_prompt,
+    format_skills_directory,
+    format_skill_invocation,
+    find_skill_by_name,
     load_skill,
     _parse_frontmatter,
     _find_skills_dir,
@@ -133,34 +134,91 @@ class TestDiscoverSkills:
 
 
 # ---------------------------------------------------------------------------
-# format_skills_prompt
+# format_skills_directory (lightweight — only name + description)
 # ---------------------------------------------------------------------------
 
-class TestFormatSkillsPrompt:
+class TestFormatSkillsDirectory:
     def test_empty(self):
-        assert format_skills_prompt([]) == ""
+        assert format_skills_directory([]) == ""
 
-    def test_single_skill(self):
+    def test_single_skill_with_description(self):
         skill = Skill(name="python", description="Python expert", content="Use type hints.")
-        result = format_skills_prompt([skill])
-        assert "## python" in result
+        result = format_skills_directory([skill])
+        assert "## python" not in result  # no content headers
+        assert "python" in result
         assert "Python expert" in result
-        assert "Use type hints." in result
+        # Full content should NOT appear in the directory
+        assert "Use type hints." not in result
 
     def test_multiple_skills(self):
-        s1 = Skill(name="a", description="", content="AAA")
-        s2 = Skill(name="b", description="B desc", content="BBB")
-        result = format_skills_prompt([s1, s2])
-        assert "## a" in result
-        assert "## b" in result
-        assert "B desc" in result
+        s1 = Skill(name="a", description="Desc A", content="AAA")
+        s2 = Skill(name="b", description="Desc B", content="BBB")
+        result = format_skills_directory([s1, s2])
+        assert "**a**" in result
+        assert "**b**" in result
+        assert "Desc A" in result
+        assert "Desc B" in result
+        # Content should not appear
+        assert "AAA" not in result
+        assert "BBB" not in result
 
-    def test_no_description_no_extra_line(self):
+    def test_no_description_no_colon(self):
         skill = Skill(name="minimal", description="", content="Do stuff.")
-        result = format_skills_prompt([skill])
-        # Should produce: "# Skills\n\n## minimal\n\nDo stuff."
-        # No empty description line between header and content
-        assert "## minimal\n\nDo stuff." in result
+        result = format_skills_directory([skill])
+        assert "- **minimal**" in result
+        # Should not have a trailing colon for empty description
+        assert "minimal**:" not in result
+
+    def test_directory_is_compact(self):
+        """Directory should be much shorter than full content injection."""
+        skill = Skill(
+            name="big-skill",
+            description="A very long skill",
+            content="Line 1\n" * 100,
+        )
+        directory = format_skills_directory([skill])
+        invocation = format_skill_invocation(skill)
+        assert len(directory) < len(invocation) / 3
+
+
+# ---------------------------------------------------------------------------
+# format_skill_invocation (full content — for on-demand injection)
+# ---------------------------------------------------------------------------
+
+class TestFormatSkillInvocation:
+    def test_includes_skill_name(self):
+        skill = Skill(name="python", description="", content="Use type hints.")
+        result = format_skill_invocation(skill)
+        assert "[Skill: python]" in result
+
+    def test_includes_full_content(self):
+        skill = Skill(name="python", description="Python expert", content="Use type hints.\nPrefer dataclasses.")
+        result = format_skill_invocation(skill)
+        assert "Use type hints." in result
+        assert "Prefer dataclasses." in result
+        # Description is NOT in the invocation — it's in the directory already
+        assert "Python expert" not in result
+
+
+# ---------------------------------------------------------------------------
+# find_skill_by_name
+# ---------------------------------------------------------------------------
+
+class TestFindSkillByName:
+    def test_exact_match(self):
+        skills = [Skill(name="python-expert", description="", content="x")]
+        assert find_skill_by_name(skills, "python-expert") is skills[0]
+
+    def test_case_insensitive(self):
+        skills = [Skill(name="Python-Expert", description="", content="x")]
+        assert find_skill_by_name(skills, "python-expert") is skills[0]
+
+    def test_not_found(self):
+        skills = [Skill(name="python-expert", description="", content="x")]
+        assert find_skill_by_name(skills, "unknown") is None
+
+    def test_empty_list(self):
+        assert find_skill_by_name([], "anything") is None
 
 
 # ---------------------------------------------------------------------------
@@ -172,14 +230,21 @@ class TestSystemPromptWithSkills:
         prompt = system_prompt(ALL_TOOLS)
         assert "# Skills" not in prompt
 
-    def test_with_skills(self):
+    def test_directory_only_in_system_prompt(self):
+        """System prompt should contain only the directory, not full content."""
         skills = [
-            Skill(name="python", description="Python expert", content="Use type hints."),
+            Skill(name="python", description="Python expert", content="Use type hints. Prefer dataclasses."),
         ]
         prompt = system_prompt(ALL_TOOLS, skills=skills)
         assert "# Skills" in prompt
-        assert "## python" in prompt
-        assert "Use type hints." in prompt
-        # existing sections still present
+        assert "python" in prompt
+        assert "Python expert" in prompt
+        # Full content should NOT be in the system prompt
+        assert "Use type hints." not in prompt
+        assert "Prefer dataclasses." not in prompt
+
+    def test_existing_sections_preserved(self):
+        skills = [Skill(name="x", description="", content="Content")]
+        prompt = system_prompt(ALL_TOOLS, skills=skills)
         assert "# Tools" in prompt
         assert "# Rules" in prompt

@@ -15,7 +15,8 @@ from .agent import Agent
 from .llm import LLM, LiteLLM
 from .config import Config
 from .session import save_session, load_session, list_sessions
-from .skills import discover_skills
+from .skills import discover_skills, find_skill_by_name, format_skill_invocation
+from .tools.skill import SkillTool
 from .prompt import system_prompt
 from . import __version__
 
@@ -217,11 +218,30 @@ def _repl(agent: Agent, config: Config):
             if not agent.skills:
                 console.print("[dim]No skills loaded. Create .corecoder/skills/*.md in your project.[/dim]")
             else:
-                console.print(f"[bold]Loaded skills ({len(agent.skills)}):[/bold]")
+                console.print(f"[bold]Available skills ({len(agent.skills)}):[/bold]")
                 for s in agent.skills:
+                    active = " [green]*[/green]" if s.name in agent.active_skills else ""
                     desc = f" — {s.description}" if s.description else ""
-                    console.print(f"  [cyan]{s.name}[/cyan]{desc}")
-                    console.print(f"  [dim]{s.source_path}[/dim]")
+                    console.print(f"  [cyan]{s.name}[/cyan]{desc}{active}")
+                console.print("[dim]Use /skill <name> or the skill tool to activate. * = active[/dim]")
+            continue
+        if user_input.startswith("/skill "):
+            skill_name = user_input[7:].strip()
+            if not skill_name:
+                console.print("[dim]Usage: /skill <name>[/dim]")
+                continue
+            skill = find_skill_by_name(agent.skills, skill_name)
+            if skill is None:
+                available = ", ".join(s.name for s in agent.skills) or "none"
+                console.print(f"[red]Skill '{skill_name}' not found.[/red] Available: {available}")
+                continue
+            # Inject skill content as a user message, same effect as SkillTool
+            agent.active_skills.add(skill.name)
+            invocation = format_skill_invocation(skill)
+            agent.messages.append({"role": "user", "content": invocation})
+            # Let the LLM acknowledge and follow the skill
+            ack = agent.chat("Acknowledge that you have activated this skill and will follow its instructions.", on_token=lambda tok: print(tok, end="", flush=True))
+            print()
             continue
 
         # call the agent
@@ -259,8 +279,9 @@ def _show_help():
         "  /diff          Show files modified this session\n"
         "  /save          Save session to disk\n"
         "  /sessions      List saved sessions\n"
-        "  /skills        List loaded skills\n"
+        "  /skills        List available skills\n"
         "  /skills reload Reload skills from .corecoder/skills/\n"
+        "  /skill <name>  Activate a skill for this session\n"
         "  quit           Exit CoreCoder\n"
         "\n"
         "[bold]Input:[/bold]\n"

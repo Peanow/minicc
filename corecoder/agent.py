@@ -17,6 +17,7 @@ from .tools.agent import AgentTool
 from .prompt import system_prompt
 from .context import ContextManager
 from .skills import Skill
+from .tools.skill import SkillTool
 
 
 class Agent:
@@ -31,15 +32,18 @@ class Agent:
         self.llm = llm
         self.tools = tools if tools is not None else ALL_TOOLS
         self.skills = skills if skills is not None else []
+        self.active_skills: set[str] = set()  # names of skills activated this session
         self.messages: list[dict] = []
         self.context = ContextManager(max_tokens=max_context_tokens)
         self.max_rounds = max_rounds
         self._system = system_prompt(self.tools, self.skills)
 
-        # wire up sub-agent capability
+        # wire up sub-agent and skill capabilities
         for t in self.tools:
             if isinstance(t, AgentTool):
                 t._parent_agent = self
+            if isinstance(t, SkillTool):
+                t._agent = self
 
     def _full_messages(self) -> list[dict]:
         return [{"role": "system", "content": self._system}] + self.messages
@@ -123,3 +127,4 @@ class Agent:
     def reset(self):
         """Clear conversation history."""
         self.messages.clear()
+        self.active_skills.clear()

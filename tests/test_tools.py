@@ -9,7 +9,7 @@ from corecoder.tools import ALL_TOOLS, get_tool
 
 
 def test_tool_count():
-    assert len(ALL_TOOLS) == 7
+    assert len(ALL_TOOLS) == 8
 
 
 def test_all_tools_have_valid_schema():
@@ -185,3 +185,53 @@ def test_agent_tool_schema():
     s = agent_t.schema()
     assert s["function"]["name"] == "agent"
     assert "task" in s["function"]["parameters"]["properties"]
+
+
+# --- skill tool ---
+
+def test_skill_tool_schema():
+    skill_t = get_tool("skill")
+    s = skill_t.schema()
+    assert s["function"]["name"] == "skill"
+    assert "name" in s["function"]["parameters"]["properties"]
+
+
+def test_skill_tool_not_initialized():
+    """SkillTool returns error when not wired to an agent."""
+    skill_t = get_tool("skill")
+    r = skill_t.execute(name="anything")
+    assert "not initialized" in r
+
+
+def test_skill_tool_activates():
+    """SkillTool returns skill content when wired to an agent with skills."""
+    from corecoder.tools.skill import SkillTool
+    from corecoder.skills import Skill
+
+    tool = SkillTool()
+    # Simulate agent wiring
+    class FakeAgent:
+        skills = [Skill(name="python-expert", description="Python expert", content="Use type hints.")]
+        active_skills = set()
+    tool._agent = FakeAgent()
+
+    r = tool.execute(name="python-expert")
+    assert "[Skill: python-expert]" in r
+    assert "Use type hints." in r
+    assert "python-expert" in FakeAgent.active_skills
+
+
+def test_skill_tool_not_found():
+    """SkillTool returns available skills when name not found."""
+    from corecoder.tools.skill import SkillTool
+    from corecoder.skills import Skill
+
+    tool = SkillTool()
+    class FakeAgent:
+        skills = [Skill(name="python-expert", description="", content="x")]
+        active_skills = set()
+    tool._agent = FakeAgent()
+
+    r = tool.execute(name="nonexistent")
+    assert "not found" in r
+    assert "python-expert" in r

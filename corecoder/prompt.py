@@ -3,7 +3,7 @@
 import os
 import platform
 
-from .skills import Skill, format_skills_prompt
+from .skills import Skill, format_skills_directory
 
 
 def system_prompt(tools, skills: list[Skill] | None = None) -> str:
@@ -35,6 +35,6 @@ You help with software engineering: writing code, fixing bugs, refactoring, expl
 """
 
     if skills:
-        prompt += "\n\n" + format_skills_prompt(skills)
+        prompt += "\n\n" + format_skills_directory(skills)
 
     return prompt

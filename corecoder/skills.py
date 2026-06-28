@@ -8,8 +8,14 @@ YAML frontmatter::
     description: Short description for /skills listing
     ---
 
-    Skill body goes here — it will be injected into the system prompt
-    so the LLM follows these domain-specific instructions.
+    Skill body goes here — it will be injected into the conversation
+    when the user invokes ``/skill my-skill``, so the LLM follows
+    these domain-specific instructions for the rest of the session.
+
+**On-demand loading:** the system prompt only contains a lightweight
+directory (name + description).  The full skill content is injected as a
+user message only when the skill is explicitly invoked via the ``/skill``
+command, saving context window space.
 
 If the frontmatter is missing the file name (sans ``.md``) becomes the
 skill name and the description defaults to an empty string.
@@ -143,16 +149,40 @@ def discover_skills(cwd: str | Path | None = None) -> list[Skill]:
 # Formatting
 # ---------------------------------------------------------------------------
 
-def format_skills_prompt(skills: list[Skill]) -> str:
-    """Render *skills* as a section suitable for the system prompt."""
+def format_skills_directory(skills: list[Skill]) -> str:
+    """Render a lightweight skill *directory* for the system prompt.
+
+    Only includes names and descriptions — the full content is withheld
+    until the user invokes ``/skill <name>``.  This keeps the system
+    prompt small while still telling the model what skills exist.
+    """
     if not skills:
         return ""
 
-    parts: list[str] = ["# Skills"]
+    lines: list[str] = [
+        "# Skills",
+        "The following skills are available. Use the `skill` tool to activate one when relevant to the user's request.",
+    ]
     for skill in skills:
-        parts.append(f"## {skill.name}")
-        if skill.description:
-            parts.append(skill.description)
-        parts.append(skill.content)
+        desc = f": {skill.description}" if skill.description else ""
+        lines.append(f"- **{skill.name}**{desc}")
 
-    return "\n\n".join(parts)
+    return "\n".join(lines)
+
+
+def format_skill_invocation(skill: Skill) -> str:
+    """Render the full content of *skill* for injection as a user message.
+
+    Called only when the user explicitly invokes a skill via
+    ``/skill <name>``.
+    """
+    return f"[Skill: {skill.name}]\n\n{skill.content}"
+
+
+def find_skill_by_name(skills: list[Skill], name: str) -> Skill | None:
+    """Look up a skill by name (case-insensitive)."""
+    name_lower = name.lower()
+    for skill in skills:
+        if skill.name.lower() == name_lower:
+            return skill
+    return None
