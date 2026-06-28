@@ -148,7 +148,7 @@ def _repl(agent: Agent, config: Config):
             continue
 
         # built-in commands
-        if user_input.lower() in ("quit", "exit", "/quit", "/exit"):
+        if user_input.lower() in ("quit", "exit", "bye", "/quit", "/exit", "/bye"):
             break
         if user_input == "/help":
             _show_help()

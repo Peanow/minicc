@@ -16,3 +16,11 @@ venv/
 dist/
 .pytest_cache/
 .tmp/
+
+# workspace: keep README.md and sample.py, ignore everything else CoreCoder creates
+workspace/*
+!workspace/README.md
+!workspace/sample.py
+
+# Session log files
+*-local-command-*.md
