@@ -3,13 +3,15 @@
 import os
 import platform
 
+from .skills import Skill, format_skills_prompt
 
-def system_prompt(tools) -> str:
+
+def system_prompt(tools, skills: list[Skill] | None = None) -> str:
     cwd = os.getcwd()
     tool_list = "\n".join(f"- **{t.name}**: {t.description}" for t in tools)
     uname = platform.uname()
 
-    return f"""\
+    prompt = f"""\
 You are CoreCoder, an AI coding assistant running in the user's terminal.
 You help with software engineering: writing code, fixing bugs, refactoring, explaining code, running commands, and more.
 
@@ -31,3 +33,8 @@ You help with software engineering: writing code, fixing bugs, refactoring, expl
 7. **Respect existing style.** Match the project's coding conventions.
 8. **Ask when unsure.** If the request is ambiguous, ask for clarification rather than guessing.
 """
+
+    if skills:
+        prompt += "\n\n" + format_skills_prompt(skills)
+
+    return prompt

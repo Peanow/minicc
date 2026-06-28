@@ -16,6 +16,7 @@ from .tools.base import Tool
 from .tools.agent import AgentTool
 from .prompt import system_prompt
 from .context import ContextManager
+from .skills import Skill
 
 
 class Agent:
@@ -25,13 +26,15 @@ class Agent:
         tools: list[Tool] | None = None,
         max_context_tokens: int = 128_000,
         max_rounds: int = 50,
+        skills: list[Skill] | None = None,
     ):
         self.llm = llm
         self.tools = tools if tools is not None else ALL_TOOLS
+        self.skills = skills if skills is not None else []
         self.messages: list[dict] = []
         self.context = ContextManager(max_tokens=max_context_tokens)
         self.max_rounds = max_rounds
-        self._system = system_prompt(self.tools)
+        self._system = system_prompt(self.tools, self.skills)
 
         # wire up sub-agent capability
         for t in self.tools:

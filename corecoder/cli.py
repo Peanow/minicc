@@ -15,6 +15,8 @@ from .agent import Agent
 from .llm import LLM, LiteLLM
 from .config import Config
 from .session import save_session, load_session, list_sessions
+from .skills import discover_skills
+from .prompt import system_prompt
 from . import __version__
 
 console = Console()
@@ -70,7 +72,7 @@ def main():
         temperature=config.temperature,
         max_tokens=config.max_tokens,
     )
-    agent = Agent(llm=llm, max_context_tokens=config.max_context_tokens)
+    agent = Agent(llm=llm, max_context_tokens=config.max_context_tokens, skills=discover_skills())
 
     # resume saved session
     if args.resume:
@@ -207,6 +209,20 @@ def _repl(agent: Agent, config: Config):
                 for s in sessions:
                     console.print(f"  [cyan]{s['id']}[/cyan] ({s['model']}, {s['saved_at']}) {s['preview']}")
             continue
+        if user_input == "/skills" or user_input == "/skills reload":
+            if user_input == "/skills reload":
+                agent.skills = discover_skills()
+                agent._system = system_prompt(agent.tools, agent.skills)
+                console.print("[green]Skills reloaded.[/green]")
+            if not agent.skills:
+                console.print("[dim]No skills loaded. Create .corecoder/skills/*.md in your project.[/dim]")
+            else:
+                console.print(f"[bold]Loaded skills ({len(agent.skills)}):[/bold]")
+                for s in agent.skills:
+                    desc = f" — {s.description}" if s.description else ""
+                    console.print(f"  [cyan]{s.name}[/cyan]{desc}")
+                    console.print(f"  [dim]{s.source_path}[/dim]")
+            continue
 
         # call the agent
         streamed: list[str] = []
@@ -243,6 +259,8 @@ def _show_help():
         "  /diff          Show files modified this session\n"
         "  /save          Save session to disk\n"
         "  /sessions      List saved sessions\n"
+        "  /skills        List loaded skills\n"
+        "  /skills reload Reload skills from .corecoder/skills/\n"
         "  quit           Exit CoreCoder\n"
         "\n"
         "[bold]Input:[/bold]\n"
