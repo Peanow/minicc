@@ -16,6 +16,7 @@ from .llm import LLM, LiteLLM
 from .config import Config
 from .session import save_session, load_session, list_sessions
 from .skills import discover_skills, find_skill_by_name, format_skill_invocation
+from .hooks import load_hooks, HookEvent
 from .tools.skill import SkillTool
 from .prompt import system_prompt
 from . import __version__
@@ -73,7 +74,12 @@ def main():
         temperature=config.temperature,
         max_tokens=config.max_tokens,
     )
-    agent = Agent(llm=llm, max_context_tokens=config.max_context_tokens, skills=discover_skills())
+    agent = Agent(llm=llm, max_context_tokens=config.max_context_tokens, skills=discover_skills(), hooks=load_hooks())
+
+    # fire SessionStart hooks
+    start_result = agent.hooks.run(HookEvent.SessionStart)
+    if start_result.message:
+        console.print(f"[dim]{start_result.message}[/dim]")
 
     # resume saved session
     if args.resume:

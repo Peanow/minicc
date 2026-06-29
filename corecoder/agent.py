@@ -10,6 +10,8 @@ which means it's done working and ready to report back.
 """
 
 import concurrent.futures
+from dataclasses import replace
+
 from .llm import LLM
 from .tools import ALL_TOOLS, get_tool
 from .tools.base import Tool
@@ -18,6 +20,7 @@ from .prompt import system_prompt
 from .context import ContextManager
 from .skills import Skill
 from .tools.skill import SkillTool
+from .hooks import HookConfig, HookEvent
 
 
 class Agent:
@@ -28,10 +31,12 @@ class Agent:
         max_context_tokens: int = 128_000,
         max_rounds: int = 50,
         skills: list[Skill] | None = None,
+        hooks: HookConfig | None = None,
     ):
         self.llm = llm
         self.tools = tools if tools is not None else ALL_TOOLS
         self.skills = skills if skills is not None else []
+        self.hooks = hooks if hooks is not None else HookConfig()
         self.active_skills: set[str] = set()  # names of skills activated this session
         self.messages: list[dict] = []
         self.context = ContextManager(max_tokens=max_context_tokens)
@@ -66,6 +71,8 @@ class Agent:
             # no tool calls -> LLM is done, return text
             if not resp.tool_calls:
                 self.messages.append(resp.message)
+                # ── Stop hooks ──
+                self.hooks.run(HookEvent.Stop, reason="done")
                 return resp.content
 
             # tool calls -> execute (parallel when multiple, like Claude Code's
@@ -95,6 +102,7 @@ class Agent:
             # compress if tool outputs are big
             self.context.maybe_compress(self.messages, self.llm)
 
+        self.hooks.run(HookEvent.Stop, reason="max_rounds")
         return "(reached maximum tool-call rounds)"
 
     def _exec_tool(self, tc) -> str:
@@ -102,12 +110,33 @@ class Agent:
         tool = get_tool(tc.name)
         if tool is None:
             return f"Error: unknown tool '{tc.name}'"
+
+        # ── PreToolUse hooks ──
+        pre = self.hooks.run(
+            HookEvent.PreToolUse, tool_name=tc.name, tool_input=tc.arguments,
+        )
+        if pre.blocked:
+            return f"Blocked by hook: {pre.message}"
+        if pre.updated_input:
+            tc = replace(tc, arguments={**tc.arguments, **pre.updated_input})
+
+        # ── Execute ──
         try:
-            return tool.execute(**tc.arguments)
+            output = tool.execute(**tc.arguments)
         except TypeError as e:
             return f"Error: bad arguments for {tc.name}: {e}"
         except Exception as e:
-            return f"Error executing {tc.name}: {e}"
+            output = f"Error executing {tc.name}: {e}"
+
+        # ── PostToolUse hooks ──
+        post = self.hooks.run(
+            HookEvent.PostToolUse,
+            tool_name=tc.name, tool_input=tc.arguments, tool_output=output,
+        )
+        if post.updated_output is not None:
+            output = post.updated_output
+
+        return output
 
     def _exec_tools_parallel(self, tool_calls, on_tool=None) -> list[str]:
         """Run multiple tool calls concurrently using threads.
