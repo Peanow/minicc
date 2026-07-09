@@ -8,6 +8,8 @@ from .glob_tool import GlobTool
 from .grep import GrepTool
 from .agent import AgentTool
 from .skill import SkillTool
+from .memory_search import MemorySearchTool
+from .memory_save import MemorySaveTool
 
 ALL_TOOLS = [
     BashTool(),
@@ -18,6 +20,8 @@ ALL_TOOLS = [
     GrepTool(),
     AgentTool(),
     SkillTool(),
+    MemorySearchTool(),
+    MemorySaveTool(),
 ]
 
 

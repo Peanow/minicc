@@ -32,6 +32,8 @@ dependencies = [
     "rich>=13.0",
     "prompt_toolkit>=3.0",
     "python-dotenv>=1.0",
+    "numpy>=1.24",
+    "fastembed>=0.4",
 ]
 
 [tool.hatch.build.targets.wheel]

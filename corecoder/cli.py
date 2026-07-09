@@ -18,6 +18,8 @@ from .session import save_session, load_session, list_sessions
 from .skills import discover_skills, find_skill_by_name, format_skill_invocation
 from .hooks import load_hooks, HookEvent
 from .tools.skill import SkillTool
+from .memory import MemoryStore, get_project_name, format_memory_context
+from .embedding import EmbeddingService
 from .prompt import system_prompt
 from . import __version__
 
@@ -74,7 +76,22 @@ def main():
         temperature=config.temperature,
         max_tokens=config.max_tokens,
     )
-    agent = Agent(llm=llm, max_context_tokens=config.max_context_tokens, skills=discover_skills(), hooks=load_hooks())
+    # create embedding service from config
+    embedding = EmbeddingService(
+        provider=config.embedding_provider,
+        model=config.embedding_model,
+        dims=config.embedding_dims,
+        api_key=config.api_key,
+        base_url=config.base_url,
+    )
+
+    agent = Agent(
+        llm=llm,
+        max_context_tokens=config.max_context_tokens,
+        skills=discover_skills(),
+        hooks=load_hooks(),
+        embedding=embedding,
+    )
 
     # fire SessionStart hooks
     start_result = agent.hooks.run(HookEvent.SessionStart)
@@ -249,6 +266,27 @@ def _repl(agent: Agent, config: Config):
             ack = agent.chat("Acknowledge that you have activated this skill and will follow its instructions.", on_token=lambda tok: print(tok, end="", flush=True))
             print()
             continue
+        # ── /memory commands ──
+        if user_input == "/memory":
+            _show_memory(agent)
+            continue
+        if user_input.startswith("/memory search "):
+            query = user_input[15:].strip()
+            if query:
+                _search_memory(agent, query)
+            else:
+                console.print("[dim]Usage: /memory search <query>[/dim]")
+            continue
+        if user_input.startswith("/memory save "):
+            text = user_input[13:].strip()
+            if text:
+                _save_memory(agent, text)
+            else:
+                console.print("[dim]Usage: /memory save <text>[/dim]")
+            continue
+        if user_input == "/memory clear":
+            _clear_memory(agent)
+            continue
 
         # call the agent
         streamed: list[str] = []
@@ -288,6 +326,10 @@ def _show_help():
         "  /skills        List available skills\n"
         "  /skills reload Reload skills from .corecoder/skills/\n"
         "  /skill <name>  Activate a skill for this session\n"
+        "  /memory        Show memory stats for this project\n"
+        "  /memory search <query>  Search memory\n"
+        "  /memory save <text>     Save a manual memory\n"
+        "  /memory clear           Clear all memories for this project\n"
         "  quit           Exit CoreCoder\n"
         "\n"
         "[bold]Input:[/bold]\n"
@@ -296,6 +338,79 @@ def _show_help():
         title="CoreCoder Help",
         border_style="dim",
     ))
+
+
+def _show_memory(agent: Agent):
+    """Show memory stats for the current project."""
+    project = get_project_name()
+    store = MemoryStore()
+    try:
+        count = store.count(project)
+        recent = store.get_recent(project, limit=5)
+    finally:
+        store.close()
+
+    console.print(f"[bold]Memory for {project}[/bold] — {count} observation(s)")
+    if recent:
+        for obs in recent:
+            console.print(f"  [cyan][{obs.type}][/cyan] {obs.title} [dim]({obs.created_at})[/dim]")
+    else:
+        console.print("[dim]No memories yet. Observations are auto-saved at session end.[/dim]")
+
+
+def _search_memory(agent: Agent, query: str):
+    """Search memory for a query."""
+    project = get_project_name()
+    store = MemoryStore()
+    try:
+        results = store.search(project, query, limit=10)
+    finally:
+        store.close()
+
+    if not results:
+        console.print(f"[dim]No memories found for '{query}'[/dim]")
+        return
+
+    console.print(f"[bold]Memory search: '{query}'[/bold] — {len(results)} result(s)")
+    for obs in results:
+        snippet = obs.content[:120] + ("..." if len(obs.content) > 120 else "")
+        console.print(f"  [cyan][{obs.type}][/cyan] {obs.title}")
+        console.print(f"  [dim]{snippet}[/dim]")
+
+
+def _save_memory(agent: Agent, text: str):
+    """Manually save a memory."""
+    from .memory import Observation
+    project = get_project_name()
+    obs = Observation(
+        project=project,
+        kind="manual",
+        type="discovery",
+        title=text[:80],
+        content=text,
+    )
+    store = MemoryStore()
+    try:
+        row_id = store.save(obs)
+    finally:
+        store.close()
+
+    if row_id:
+        console.print(f"[green]Memory saved (id={row_id})[/green]")
+    else:
+        console.print("[dim]Memory already exists (duplicate)[/dim]")
+
+
+def _clear_memory(agent: Agent):
+    """Clear all memories for the current project."""
+    project = get_project_name()
+    store = MemoryStore()
+    try:
+        count = store.delete_project(project)
+    finally:
+        store.close()
+
+    console.print(f"[yellow]Cleared {count} memory item(s) for {project}[/yellow]")
 
 
 def _brief(kwargs: dict, maxlen: int = 80) -> str:

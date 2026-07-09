@@ -6,7 +6,7 @@ import platform
 from .skills import Skill, format_skills_directory
 
 
-def system_prompt(tools, skills: list[Skill] | None = None) -> str:
+def system_prompt(tools, skills: list[Skill] | None = None, memory_context: str = "") -> str:
     cwd = os.getcwd()
     tool_list = "\n".join(f"- **{t.name}**: {t.description}" for t in tools)
     uname = platform.uname()
@@ -36,5 +36,8 @@ You help with software engineering: writing code, fixing bugs, refactoring, expl
 
     if skills:
         prompt += "\n\n" + format_skills_directory(skills)
+
+    if memory_context:
+        prompt += "\n\n" + memory_context
 
     return prompt
