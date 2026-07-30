@@ -7,8 +7,10 @@ from corecoder.llm import LLM
 from corecoder.config import Config
 from corecoder.tools import ALL_TOOLS, ToolRegistry
 from corecoder.trace import JsonlTraceSink, RunResult
+from corecoder.policy import ExecutionPolicy, PermissionMode
 
 __all__ = [
     "Agent", "LLM", "Config", "ALL_TOOLS", "ToolRegistry",
     "JsonlTraceSink", "RunResult", "__version__",
+    "ExecutionPolicy", "PermissionMode",
 ]

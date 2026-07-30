@@ -37,6 +37,7 @@ class Config:
     embedding_provider: str = "none"      # "local" | "api" | "none"
     embedding_model: str = "BAAI/bge-small-zh-v1.5"
     embedding_dims: int = 512
+    permission_mode: str = "workspace-write"
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -60,4 +61,5 @@ class Config:
             embedding_provider=os.getenv("CORECODER_EMBEDDING_PROVIDER", "none"),
             embedding_model=os.getenv("CORECODER_EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5"),
             embedding_dims=int(os.getenv("CORECODER_EMBEDDING_DIMS", "512")),
+            permission_mode=os.getenv("CORECODER_PERMISSION_MODE", "workspace-write"),
         )

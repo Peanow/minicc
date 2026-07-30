@@ -340,6 +340,7 @@ def test_agent_hook_modify_input():
     """PreToolUse hook can modify tool arguments."""
     from corecoder.agent import Agent
     from corecoder.llm import LLM, ToolCall
+    from corecoder.policy import ExecutionPolicy
 
     hooks = HookConfig(hooks={
         HookEvent.PreToolUse: [
@@ -350,9 +351,48 @@ def test_agent_hook_modify_input():
         ],
     })
     llm = LLM(model="test", api_key="test")
-    agent = Agent(llm=llm, hooks=hooks)
+    agent = Agent(
+        llm=llm,
+        hooks=hooks,
+        policy=ExecutionPolicy("full-access"),
+    )
 
     tc = ToolCall(id="test", name="bash", arguments={"command": "rm -rf /"})
     result = agent._exec_tool(tc)
     # the command was modified to "echo safe" by the hook
     assert "safe" in result
+
+
+def test_agent_rechecks_policy_after_hook_modifies_path(tmp_path):
+    """A hook cannot redirect an allowed write outside the workspace."""
+    from corecoder.agent import Agent
+    from corecoder.llm import LLM, ToolCall
+    from corecoder.policy import ExecutionPolicy
+    from corecoder.tools.write import WriteFileTool
+
+    outside = tmp_path.parent / "hook-escaped.txt"
+    hooks = HookConfig(hooks={
+        HookEvent.PreToolUse: [
+            HookMatcher(
+                matcher="write_file",
+                command=(
+                    "echo '{\"updated_input\": "
+                    f"{{\"file_path\": \"{outside}\"}}}}'"
+                ),
+            ),
+        ],
+    })
+    agent = Agent(
+        llm=LLM(model="test", api_key="test"),
+        tools=[WriteFileTool()],
+        hooks=hooks,
+        policy=ExecutionPolicy("workspace-write", workspace=tmp_path),
+    )
+    tc = ToolCall(
+        id="test",
+        name="write_file",
+        arguments={"file_path": "inside.txt", "content": "data"},
+    )
+    result = agent._exec_tool(tc)
+    assert "Blocked by policy" in result
+    assert not outside.exists()

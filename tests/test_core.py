@@ -43,6 +43,7 @@ def test_config_defaults(monkeypatch):
     assert c.model == "gpt-4o"
     assert c.max_tokens == 4096
     assert c.temperature == 0.0
+    assert c.permission_mode == "workspace-write"
 
     os.environ.update(saved)
 

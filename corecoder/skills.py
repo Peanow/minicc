@@ -1,7 +1,8 @@
-"""Project-level skills - load domain instructions into the system prompt.
+"""Project-level skills with progressive disclosure.
 
-Each skill is a Markdown file under ``.corecoder/skills/`` with optional
-YAML frontmatter::
+The preferred layout follows the open Agent Skills convention:
+``.agents/skills/<name>/SKILL.md``. The former flat
+``.corecoder/skills/*.md`` layout remains available as a compatibility path.
 
     ---
     name: my-skill
@@ -20,9 +21,8 @@ command, saving context window space.
 If the frontmatter is missing the file name (sans ``.md``) becomes the
 skill name and the description defaults to an empty string.
 
-Skills are discovered at startup by walking from *cwd* upward to the
-home directory looking for a ``.corecoder/skills/`` directory.  The
-closest match wins (same strategy as ``config.py`` uses for ``.env``).
+Standard skill directories are layered from the Git root down to the current
+directory. A closer skill with the same name overrides its parent definition.
 """
 
 from __future__ import annotations
@@ -30,6 +30,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from .instructions import find_project_root
 
 _SKILLS_DIR_NAME = ".corecoder"
 _SKILLS_SUBDIR = "skills"
@@ -96,7 +97,8 @@ def load_skill(path: Path) -> Skill:
     text = path.read_text(encoding="utf-8")
     meta, body = _parse_frontmatter(text)
 
-    name = meta.get("name", path.stem)
+    default_name = path.parent.name if path.name == "SKILL.md" else path.stem
+    name = meta.get("name", default_name)
     description = meta.get("description", "")
 
     return Skill(
@@ -128,28 +130,50 @@ def _find_skills_dir(cwd: Path) -> Path | None:
 def discover_skills(cwd: str | Path | None = None) -> list[Skill]:
     """Discover and load all project-level skills.
 
-    Returns an empty list when no ``.corecoder/skills/`` directory exists.
+    Standard skills are preferred. If none exist, load the nearest legacy
+    ``.corecoder/skills`` directory for backward compatibility.
     """
-    start = Path(cwd) if cwd else Path.cwd()
-    skills_dir = _find_skills_dir(start)
-    if skills_dir is None:
-        return []
+    start = (Path(cwd) if cwd else Path.cwd()).expanduser().resolve()
+    root = find_project_root(start)
+    directories = [root]
+    current = root
+    if start != root:
+        for part in start.relative_to(root).parts:
+            current = current / part
+            directories.append(current)
 
-    skills: list[Skill] = []
-    for md_file in sorted(skills_dir.glob("*.md")):
-        try:
-            skills.append(load_skill(md_file))
-        except Exception:
-            # skip unreadable / malformed skills silently
+    by_name: dict[str, Skill] = {}
+    for directory in directories:
+        standard_root = directory / ".agents" / "skills"
+        if not standard_root.is_dir():
             continue
-    return skills
+        for skill_file in sorted(standard_root.glob("*/SKILL.md")):
+            try:
+                skill = load_skill(skill_file)
+                by_name[skill.name.lower()] = skill
+            except Exception:
+                continue
+
+    if by_name:
+        return sorted(by_name.values(), key=lambda skill: skill.name.lower())
+
+    legacy_dir = _find_skills_dir(start)
+    if legacy_dir is None:
+        return []
+    for md_file in sorted(legacy_dir.glob("*.md")):
+        try:
+            skill = load_skill(md_file)
+            by_name[skill.name.lower()] = skill
+        except Exception:
+            continue
+    return sorted(by_name.values(), key=lambda skill: skill.name.lower())
 
 
 # ---------------------------------------------------------------------------
 # Formatting
 # ---------------------------------------------------------------------------
 
-def format_skills_directory(skills: list[Skill]) -> str:
+def format_skills_directory(skills: list[Skill], max_chars: int = 8_000) -> str:
     """Render a lightweight skill *directory* for the system prompt.
 
     Only includes names and descriptions — the full content is withheld
@@ -165,7 +189,16 @@ def format_skills_directory(skills: list[Skill]) -> str:
     ]
     for skill in skills:
         desc = f": {skill.description}" if skill.description else ""
-        lines.append(f"- **{skill.name}**{desc}")
+        source = (
+            f" ({skill.source_path})"
+            if skill.source_path != Path(".")
+            else ""
+        )
+        candidate = f"- **{skill.name}**{desc}{source}"
+        if len("\n".join(lines + [candidate])) > max_chars:
+            lines.append("- ... additional skills omitted to preserve context budget")
+            break
+        lines.append(candidate)
 
     return "\n".join(lines)
 

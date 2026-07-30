@@ -93,7 +93,28 @@ corecoder -p "给 parse_config() 加上错误处理"
 
 # 同时记录 JSONL 执行轨迹
 corecoder -p "修复测试失败" --trace .tmp/run.jsonl
+
+# 只读分析，不允许文件写入
+corecoder --permission-mode read-only
 ```
+
+## 项目指令与 Skills
+
+- CoreCoder 从 Git 根目录到当前目录依次加载 `AGENTS.md`；
+  同目录中的 `AGENTS.override.md` 优先。
+- 如果根目录没有 AGENTS 文件，会兼容读取根目录 `CLAUDE.md`。
+- 推荐 Skill 结构为 `.agents/skills/<name>/SKILL.md`，系统提示只放名称、
+  描述和路径，调用时才加载完整内容。
+- 旧 `.corecoder/skills/*.md` 仍可使用，但仅作为兼容格式。
+
+## 权限模式
+
+- `read-only`：允许读取、搜索和少量只读 Shell 命令。
+- `workspace-write`：允许工作区内编辑，Shell 命令需要交互确认；
+  非交互模式无法确认时默认拒绝。
+- `full-access`：跳过应用权限层，仍会经过 Bash 工具自身的危险命令检查。
+
+这些规则是 Agent 运行时的应用层控制，不是操作系统沙箱。
 
 ## 架构
 

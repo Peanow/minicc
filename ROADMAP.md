@@ -16,11 +16,12 @@
 
 ## Milestone 2：策略与安全
 
-- [ ] 分层加载 `AGENTS.md`
-- [ ] `.agents/skills/<name>/SKILL.md` 与渐进式加载
+- [x] 分层加载 `AGENTS.md`
+- [x] `.agents/skills/<name>/SKILL.md` 与渐进式加载
 - [ ] 可插拔上下文策略和真实 tokenizer
-- [ ] `read-only`、`workspace-write`、`full-access` 权限模式
-- [ ] 路径、symlink、命令和网络行为策略
+- [x] `read-only`、`workspace-write`、`full-access` 权限模式
+- [x] 路径与 symlink 越界防护、Shell 审批骨架
+- [ ] 命令参数与网络行为细粒度分类
 
 ## Milestone 3：评测与报告
 

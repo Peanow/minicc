@@ -66,6 +66,7 @@ def test_agent_executes_its_private_tool_registry():
         "run_started",
         "llm_started",
         "llm_finished",
+        "policy_decision",
         "tool_started",
         "tool_finished",
         "llm_started",

@@ -132,6 +132,31 @@ class TestDiscoverSkills:
         assert len(skills) == 1
         assert skills[0].name == "child"
 
+    def test_standard_skill_layout(self, tmp_path):
+        (tmp_path / ".git").mkdir()
+        skill_file = tmp_path / ".agents" / "skills" / "python" / "SKILL.md"
+        skill_file.parent.mkdir(parents=True)
+        skill_file.write_text(
+            "---\nname: python\ndescription: Python workflow\n---\nUse pytest."
+        )
+        skills = discover_skills(cwd=tmp_path)
+        assert len(skills) == 1
+        assert skills[0].name == "python"
+        assert skills[0].source_path == skill_file
+
+    def test_standard_child_skill_overrides_parent_name(self, tmp_path):
+        (tmp_path / ".git").mkdir()
+        root_skill = tmp_path / ".agents" / "skills" / "review" / "SKILL.md"
+        root_skill.parent.mkdir(parents=True)
+        root_skill.write_text("---\nname: review\n---\nRoot")
+        child = tmp_path / "service"
+        child_skill = child / ".agents" / "skills" / "review" / "SKILL.md"
+        child_skill.parent.mkdir(parents=True)
+        child_skill.write_text("---\nname: review\n---\nChild")
+        skills = discover_skills(cwd=child)
+        assert len(skills) == 1
+        assert skills[0].content == "Child"
+
 
 # ---------------------------------------------------------------------------
 # format_skills_directory (lightweight — only name + description)
@@ -179,6 +204,15 @@ class TestFormatSkillsDirectory:
         directory = format_skills_directory([skill])
         invocation = format_skill_invocation(skill)
         assert len(directory) < len(invocation) / 3
+
+    def test_directory_budget(self):
+        skills = [
+            Skill(name=f"skill-{i}", description="x" * 100, content="body")
+            for i in range(10)
+        ]
+        result = format_skills_directory(skills, max_chars=300)
+        assert "additional skills omitted" in result
+        assert len(result) < 500
 
 
 # ---------------------------------------------------------------------------

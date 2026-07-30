@@ -48,5 +48,13 @@ class SkillTool(Tool):
 
         # Record activation so we know it's active this session
         self._agent.active_skills.add(skill.name)
+        trace = getattr(self._agent, "trace", None)
+        if trace is not None:
+            trace.emit(
+                "skill_activated",
+                skill=skill.name,
+                source=str(skill.source_path),
+                activation="tool",
+            )
 
         return format_skill_invocation(skill)

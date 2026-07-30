@@ -59,6 +59,7 @@ OPENAI_BASE_URL=https://api.deepseek.com
 CORECODER_MODEL=deepseek-v4-flash
 CORECODER_PROVIDER=openai
 CORECODER_EMBEDDING_PROVIDER=none
+CORECODER_PERMISSION_MODE=workspace-write
 ```
 
 不要把真实密钥写入 README 或提交到 Git。复制 `.env.example` 为 `.env` 即可，
@@ -71,6 +72,17 @@ corecoder -p "分析 sample.py" --trace .tmp/sample-run.jsonl
 ```
 
 Trace 会记录 LLM 轮次、工具调用、耗时、token 和上下文压缩事件，并对常见密钥格式脱敏。
+
+## 权限模式
+
+```bash
+corecoder --permission-mode read-only
+corecoder --permission-mode workspace-write
+corecoder --permission-mode full-access
+```
+
+`workspace-write` 是默认值：文件工具只能写工作区，Shell 命令需要逐次确认。
+`-p` 非交互模式无法确认，因此会拒绝需要确认的 Shell 命令。
 
 ## Workspace 验证目录
 

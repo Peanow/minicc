@@ -21,6 +21,17 @@ The focus is not only whether an agent completes a task, but why it succeeds,
 where it fails, how much context it consumes, and how model or strategy changes
 affect the result.
 
+## Project instructions, skills, and permissions
+
+- `AGENTS.md` files load from the Git root down to the current directory;
+  `AGENTS.override.md` wins within a directory.
+- Skills use `.agents/skills/<name>/SKILL.md` and load progressively.
+- Permission modes are `read-only`, `workspace-write`, and `full-access`.
+  Workspace-write confines file tools to the workspace and asks before shell
+  commands. Non-interactive runs deny requests that require approval.
+
+The permission engine is an application policy layer, not an OS sandbox.
+
 ---
 
 ```

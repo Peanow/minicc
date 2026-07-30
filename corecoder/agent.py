@@ -30,6 +30,8 @@ from .memory import (
 )
 from .embedding import EmbeddingService
 from .trace import NullTraceSink, RunResult, TraceSink
+from .instructions import format_project_instructions, load_project_instructions
+from .policy import Decision, ExecutionPolicy
 
 
 class Agent:
@@ -43,6 +45,8 @@ class Agent:
         hooks: HookConfig | None = None,
         embedding: EmbeddingService | None = None,
         trace: TraceSink | None = None,
+        instruction_sources=None,
+        policy: ExecutionPolicy | None = None,
     ):
         self.llm = llm
         self.tool_registry = ToolRegistry(tools)
@@ -51,6 +55,7 @@ class Agent:
         self.hooks = hooks if hooks is not None else HookConfig()
         self.embedding = embedding or EmbeddingService(provider="none")
         self.trace = trace or NullTraceSink()
+        self.policy = policy or ExecutionPolicy()
         self.active_skills: set[str] = set()
         self.messages: list[dict] = []
         self.context = ContextManager(max_tokens=max_context_tokens)
@@ -60,8 +65,14 @@ class Agent:
 
         # cross-session memory
         self._project = get_project_name()
+        self.instruction_sources = (
+            list(instruction_sources)
+            if instruction_sources is not None
+            else load_project_instructions()
+        )
         self._memory_dir = self._load_memory_directory()
-        self._system = system_prompt(self.tools, self.skills, self._memory_dir)
+        self._system = ""
+        self.refresh_system_prompt()
         self._memory_injected = False
 
         # ── Register hook callbacks for memory lifecycle ──
@@ -87,6 +98,14 @@ class Agent:
     def changed_files(self) -> set[str]:
         """Files changed by tools owned by this agent."""
         return self.tool_registry.changed_files
+
+    def refresh_system_prompt(self):
+        self._system = system_prompt(
+            self.tools,
+            self.skills,
+            self._memory_dir,
+            format_project_instructions(self.instruction_sources),
+        )
 
     def _full_messages(self) -> list[dict]:
         return [{"role": "system", "content": self._system}] + self.messages
@@ -204,6 +223,12 @@ class Agent:
             user_input=user_input,
             max_rounds=self.max_rounds,
             tools=[tool.name for tool in self.tools],
+            instruction_sources=[{
+                "path": str(source.path),
+                "loaded_bytes": source.loaded_bytes,
+                "source_bytes": source.source_bytes,
+                "truncated": source.truncated,
+            } for source in self.instruction_sources],
         )
         self.messages.append({"role": "user", "content": user_input})
 
@@ -339,6 +364,16 @@ class Agent:
             return f"Blocked by hook: {pre.message}"
         if pre.updated_input:
             tc = replace(tc, arguments={**tc.arguments, **pre.updated_input})
+
+        policy = self.policy.authorize(tc.name, tc.arguments)
+        self.trace.emit(
+            "policy_decision",
+            tool=tc.name,
+            decision=policy.decision.value,
+            reason=policy.reason,
+        )
+        if policy.decision != Decision.ALLOW:
+            return f"Blocked by policy: {policy.reason}"
 
         # ── Execute ──
         started = time.perf_counter()

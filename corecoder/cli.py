@@ -22,6 +22,7 @@ from .memory import MemoryStore, get_project_name, format_memory_context
 from .embedding import EmbeddingService
 from .prompt import system_prompt
 from .trace import JsonlTraceSink
+from .policy import ExecutionPolicy, PermissionMode
 from . import __version__
 
 console = Console()
@@ -38,6 +39,11 @@ def _parse_args():
     p.add_argument("-p", "--prompt", help="One-shot prompt (non-interactive mode)")
     p.add_argument("-r", "--resume", metavar="ID", help="Resume a saved session")
     p.add_argument("--trace", metavar="PATH", help="Write a structured JSONL execution trace")
+    p.add_argument(
+        "--permission-mode",
+        choices=[mode.value for mode in PermissionMode],
+        help="Tool permission mode (default: $CORECODER_PERMISSION_MODE or workspace-write)",
+    )
     p.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
     return p.parse_args()
 
@@ -53,6 +59,8 @@ def main():
         config.base_url = args.base_url
     if args.api_key:
         config.api_key = args.api_key
+    if args.permission_mode:
+        config.permission_mode = args.permission_mode
 
     if not config.api_key:
         console.print("[red bold]No API key found.[/]")
@@ -88,6 +96,12 @@ def main():
     )
 
     trace = JsonlTraceSink(args.trace) if args.trace else None
+    approval_callback = None if args.prompt else _approve_tool
+    policy = ExecutionPolicy(
+        mode=config.permission_mode,
+        workspace=os.getcwd(),
+        approval_callback=approval_callback,
+    )
     agent = Agent(
         llm=llm,
         max_context_tokens=config.max_context_tokens,
@@ -95,6 +109,7 @@ def main():
         hooks=load_hooks(),
         embedding=embedding,
         trace=trace,
+        policy=policy,
     )
 
     # fire SessionStart hooks
@@ -143,6 +158,16 @@ def _run_once(agent: Agent, prompt: str):
 
     agent.chat(prompt, on_token=on_token, on_tool=on_tool)
     print()
+
+
+def _approve_tool(tool_name: str, arguments: dict, reason: str) -> bool:
+    """Interactive approval for policy decisions that require user consent."""
+    console.print(
+        f"\n[yellow]Approval required:[/yellow] {tool_name}({_brief(arguments)})"
+    )
+    console.print(f"[dim]{reason}[/dim]")
+    answer = console.input("Allow once? [y/N] ").strip().lower()
+    return answer in {"y", "yes"}
 
 
 def _repl(agent: Agent, config: Config):
@@ -248,7 +273,7 @@ def _repl(agent: Agent, config: Config):
         if user_input == "/skills" or user_input == "/skills reload":
             if user_input == "/skills reload":
                 agent.skills = discover_skills()
-                agent._system = system_prompt(agent.tools, agent.skills)
+                agent.refresh_system_prompt()
                 console.print("[green]Skills reloaded.[/green]")
             if not agent.skills:
                 console.print("[dim]No skills loaded. Create .corecoder/skills/*.md in your project.[/dim]")
@@ -272,6 +297,12 @@ def _repl(agent: Agent, config: Config):
                 continue
             # Inject skill content as a user message, same effect as SkillTool
             agent.active_skills.add(skill.name)
+            agent.trace.emit(
+                "skill_activated",
+                skill=skill.name,
+                source=str(skill.source_path),
+                activation="explicit",
+            )
             invocation = format_skill_invocation(skill)
             agent.messages.append({"role": "user", "content": invocation})
             # Let the LLM acknowledge and follow the skill
