@@ -1,4 +1,4 @@
-"""Memory search tool — hybrid keyword + semantic search via ChromaDB.
+"""Memory search tool — hybrid keyword and semantic search in SQLite.
 
 When the model needs historical context from previous sessions (past
 decisions, files modified, errors encountered), it invokes
@@ -7,9 +7,8 @@ observations.
 
 Search flow:
     1. Embed the query via local model
-    2. ChromaDB semantic search → matching observation IDs
-    3. SQLite backfill → full observation content
-    4. Merge with FTS5 keyword results
+    2. Compare with SQLite embedding BLOBs
+    3. Merge with FTS5 keyword results
 """
 
 from .base import Tool
@@ -19,7 +18,7 @@ class MemorySearchTool(Tool):
     name = "memory_search"
     description = (
         "Search cross-session memory for relevant context from previous "
-        "conversations. Uses semantic vector search (ChromaDB) and keyword "
+        "conversations. Uses optional vector similarity and keyword "
         "matching (FTS5) to find observations about past decisions, "
         "file changes, errors, and discoveries."
     )

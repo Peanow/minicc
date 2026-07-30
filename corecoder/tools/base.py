@@ -9,6 +9,7 @@ class Tool(ABC):
     name: str
     description: str
     parameters: dict  # JSON Schema for the function args
+    parallel_safe: bool = False
 
     @abstractmethod
     def execute(self, **kwargs) -> str:

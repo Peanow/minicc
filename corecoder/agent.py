@@ -10,10 +10,11 @@ which means it's done working and ready to report back.
 """
 
 import concurrent.futures
+import time
 from dataclasses import replace
 
 from .llm import LLM
-from .tools import ALL_TOOLS, get_tool
+from .tools import ToolRegistry
 from .tools.base import Tool
 from .tools.agent import AgentTool
 from .tools.memory_search import MemorySearchTool
@@ -28,6 +29,7 @@ from .memory import (
     format_memory_context, get_project_name,
 )
 from .embedding import EmbeddingService
+from .trace import NullTraceSink, RunResult, TraceSink
 
 
 class Agent:
@@ -40,16 +42,21 @@ class Agent:
         skills: list[Skill] | None = None,
         hooks: HookConfig | None = None,
         embedding: EmbeddingService | None = None,
+        trace: TraceSink | None = None,
     ):
         self.llm = llm
-        self.tools = tools if tools is not None else ALL_TOOLS
+        self.tool_registry = ToolRegistry(tools)
+        self.tools = self.tool_registry.values()
         self.skills = skills if skills is not None else []
         self.hooks = hooks if hooks is not None else HookConfig()
         self.embedding = embedding or EmbeddingService(provider="none")
+        self.trace = trace or NullTraceSink()
         self.active_skills: set[str] = set()
         self.messages: list[dict] = []
         self.context = ContextManager(max_tokens=max_context_tokens)
         self.max_rounds = max_rounds
+        self._last_status = "idle"
+        self._closed = False
 
         # cross-session memory
         self._project = get_project_name()
@@ -76,6 +83,11 @@ class Agent:
             if isinstance(t, (MemorySearchTool, MemorySaveTool)):
                 t._agent = self
 
+    @property
+    def changed_files(self) -> set[str]:
+        """Files changed by tools owned by this agent."""
+        return self.tool_registry.changed_files
+
     def _full_messages(self) -> list[dict]:
         return [{"role": "system", "content": self._system}] + self.messages
 
@@ -84,8 +96,8 @@ class Agent:
     def _on_memory_save(self, **kwargs) -> int:
         """Hook callback: extract observations from conversation and persist.
 
-        Triggered by MemorySave hook at session end. Writes to both
-        SQLite (full content) and ChromaDB (vector embeddings).
+        Triggered by MemorySave hook at session end. SQLite stores both
+        full observations and optional embedding vectors.
         """
         if not self.messages:
             return 0
@@ -104,7 +116,7 @@ class Agent:
                 else None
             )
 
-            # dual-write: SQLite (full content) + ChromaDB (vectors)
+            # single-store persistence: content and optional vectors in SQLite
             store = MemoryStore(embedding_dims=self.embedding.dims)
             try:
                 results = store.save_many(observations, embeddings=embeddings)
@@ -117,9 +129,8 @@ class Agent:
     def _on_memory_inject(self, **kwargs) -> str:
         """Hook callback: inject relevant memories into conversation.
 
-        Triggered by MemoryInject hook at session start. Performs
-        semantic search via ChromaDB, then backfills full content
-        from SQLite.
+        Triggered by MemoryInject hook at session start. Performs hybrid
+        keyword/vector search in the project-scoped SQLite store.
         """
         user_input = kwargs.get("user_input", "")
         if not user_input:
@@ -182,31 +193,57 @@ class Agent:
             })
 
     def _tool_schemas(self) -> list[dict]:
-        return [t.schema() for t in self.tools]
+        return self.tool_registry.schemas()
 
     def chat(self, user_input: str, on_token=None, on_tool=None) -> str:
         """Process one user message. May involve multiple LLM/tool rounds."""
+        self._last_status = "running"
+        self.trace.emit(
+            "run_started",
+            model=self.llm.model,
+            user_input=user_input,
+            max_rounds=self.max_rounds,
+            tools=[tool.name for tool in self.tools],
+        )
         self.messages.append({"role": "user", "content": user_input})
 
         # on-demand memory injection on first turn via hook
         self._inject_relevant_memory(user_input)
 
-        self.context.maybe_compress(self.messages, self.llm)
+        self._maybe_compress()
 
-        for _ in range(self.max_rounds):
+        for round_index in range(self.max_rounds):
+            llm_started = time.perf_counter()
+            self.trace.emit(
+                "llm_started",
+                round=round_index,
+                message_count=len(self.messages),
+            )
             resp = self.llm.chat(
                 messages=self._full_messages(),
                 tools=self._tool_schemas(),
                 on_token=on_token,
             )
+            self.trace.emit(
+                "llm_finished",
+                round=round_index,
+                duration_ms=round((time.perf_counter() - llm_started) * 1000, 2),
+                prompt_tokens=resp.prompt_tokens,
+                completion_tokens=resp.completion_tokens,
+                tool_calls=[tc.name for tc in resp.tool_calls],
+            )
 
             # no tool calls -> LLM is done, return text
             if not resp.tool_calls:
                 self.messages.append(resp.message)
-                # ── MemorySave hook: extract & persist observations ──
-                self.hooks.run(HookEvent.MemorySave)
                 # ── Stop hooks ──
                 self.hooks.run(HookEvent.Stop, reason="done")
+                self._last_status = "completed"
+                self.trace.emit(
+                    "run_finished",
+                    status=self._last_status,
+                    changed_files=sorted(self.changed_files),
+                )
                 return resp.content
 
             # tool calls -> execute
@@ -231,16 +268,61 @@ class Agent:
                         "content": result,
                     })
 
-            self.context.maybe_compress(self.messages, self.llm)
+            self._maybe_compress()
 
-        self.hooks.run(HookEvent.MemorySave)
         self.hooks.run(HookEvent.Stop, reason="max_rounds")
+        self._last_status = "max_rounds"
+        self.trace.emit(
+            "run_finished",
+            status=self._last_status,
+            changed_files=sorted(self.changed_files),
+        )
         return "(reached maximum tool-call rounds)"
+
+    def run(self, user_input: str, on_token=None, on_tool=None) -> RunResult:
+        """Run one task and return a structured result for automation."""
+        answer = self.chat(user_input, on_token=on_token, on_tool=on_tool)
+        trace_path = getattr(self.trace, "path", None)
+        return RunResult(
+            status=self._last_status,
+            final_answer=answer,
+            changed_files=sorted(self.changed_files),
+            prompt_tokens=self.llm.total_prompt_tokens,
+            completion_tokens=self.llm.total_completion_tokens,
+            estimated_cost=self.llm.estimated_cost,
+            trace_path=str(trace_path) if trace_path else None,
+        )
+
+    def _maybe_compress(self):
+        from .context import estimate_tokens
+
+        before = estimate_tokens(self.messages)
+        changed = self.context.maybe_compress(self.messages, self.llm)
+        if changed:
+            self.trace.emit(
+                "context_compacted",
+                before_tokens=before,
+                after_tokens=estimate_tokens(self.messages),
+                message_count=len(self.messages),
+            )
+        return changed
+
+    def close(self):
+        """Finalize the session and persist memory once."""
+        if self._closed:
+            return
+        self._closed = True
+        result = self.hooks.run(HookEvent.MemorySave)
+        self.trace.emit(
+            "memory_written",
+            count=result.data if isinstance(result.data, int) else 0,
+        )
 
     def _exec_tool(self, tc) -> str:
         """Execute a single tool call, returning the result string."""
-        tool = get_tool(tc.name)
+        tool = self.tool_registry.get(tc.name)
         if tool is None:
+            self.trace.emit("tool_finished", tool=tc.name, status="unknown")
             return f"Error: unknown tool '{tc.name}'"
 
         # ── PreToolUse hooks ──
@@ -248,15 +330,23 @@ class Agent:
             HookEvent.PreToolUse, tool_name=tc.name, tool_input=tc.arguments,
         )
         if pre.blocked:
+            self.trace.emit(
+                "policy_decision",
+                tool=tc.name,
+                decision="deny",
+                reason=pre.message,
+            )
             return f"Blocked by hook: {pre.message}"
         if pre.updated_input:
             tc = replace(tc, arguments={**tc.arguments, **pre.updated_input})
 
         # ── Execute ──
+        started = time.perf_counter()
+        self.trace.emit("tool_started", tool=tc.name, arguments=tc.arguments)
         try:
             output = tool.execute(**tc.arguments)
         except TypeError as e:
-            return f"Error: bad arguments for {tc.name}: {e}"
+            output = f"Error: bad arguments for {tc.name}: {e}"
         except Exception as e:
             output = f"Error executing {tc.name}: {e}"
 
@@ -268,13 +358,23 @@ class Agent:
         if post.updated_output is not None:
             output = post.updated_output
 
+        self.trace.emit(
+            "tool_finished",
+            tool=tc.name,
+            duration_ms=round((time.perf_counter() - started) * 1000, 2),
+            output=output,
+        )
         return output
 
     def _exec_tools_parallel(self, tool_calls, on_tool=None) -> list[str]:
-        """Run multiple tool calls concurrently using threads."""
+        """Run read-only calls concurrently and side effects sequentially."""
         for tc in tool_calls:
             if on_tool:
                 on_tool(tc.name, tc.arguments)
+
+        tools = [self.tool_registry.get(tc.name) for tc in tool_calls]
+        if not all(tool and tool.parallel_safe for tool in tools):
+            return [self._exec_tool(tc) for tc in tool_calls]
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
             futures = [pool.submit(self._exec_tool, tc) for tc in tool_calls]
@@ -285,3 +385,4 @@ class Agent:
         self.messages.clear()
         self.active_skills.clear()
         self._memory_injected = False
+        self._closed = False

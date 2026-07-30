@@ -3,9 +3,9 @@
 ## 日常使用
 
 ```bash
-cd /Users/didi/learn-ai/CoreCoder
+cd /path/to/minicc
 source .venv/bin/activate
-corecoder -m glm-5.1-external
+corecoder
 ```
 
 ## 开发验证（推荐）
@@ -20,7 +20,7 @@ corecoder -m glm-5.1-external
 1. 激活虚拟环境
 2. `pip install -e .` 安装最新代码
 3. 进入 `workspace/` 目录
-4. 启动 `corecoder -m glm-5.1-external`
+4. 启动 `corecoder`（模型配置从 `.env` 读取）
 
 ### 手动步骤
 
@@ -28,7 +28,7 @@ corecoder -m glm-5.1-external
 source .venv/bin/activate
 pip install -e . -q          # 安装最新版
 cd workspace                  # 进入验证目录
-corecoder -m glm-5.1-external
+corecoder
 ```
 
 ## 退出
@@ -54,9 +54,23 @@ corecoder -m glm-5.1-external
 已配置在 `.env` 中，启动时自动加载：
 
 ```
-OPENAI_API_KEY=sk-ZcRJ_fHWXWYwYWzzmHZC_Q
-OPENAI_BASE_URL=https://llm-proxy.intra.xiaojukeji.com/v1
+OPENAI_API_KEY=replace-with-your-api-key
+OPENAI_BASE_URL=https://api.deepseek.com
+CORECODER_MODEL=deepseek-v4-flash
+CORECODER_PROVIDER=openai
+CORECODER_EMBEDDING_PROVIDER=none
 ```
+
+不要把真实密钥写入 README 或提交到 Git。复制 `.env.example` 为 `.env` 即可，
+后者已经被 `.gitignore` 忽略。
+
+## 记录执行轨迹
+
+```bash
+corecoder -p "分析 sample.py" --trace .tmp/sample-run.jsonl
+```
+
+Trace 会记录 LLM 轮次、工具调用、耗时、token 和上下文压缩事件，并对常见密钥格式脱敏。
 
 ## Workspace 验证目录
 

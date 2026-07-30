@@ -2,7 +2,7 @@
 
 ## 项目概览
 
-CoreCoder 是一个极简 AI coding agent（~1400 行 Python），逆向工程自 Claude Code 512K 行 TypeScript 源码，提炼出 7 个核心架构模式的可运行参考实现。不是生产工具，是教学蓝图——coding agent 领域的 nanoGPT。
+本仓库是上游 CoreCoder 的实验性增强 Fork。上游提供极简 Agent 核心和 7 篇架构文章；当前分支增加 Skills、Hooks、SQLite 长期记忆、实例级工具注册和 JSONL Trace，目标是形成可观测、可评测的多模型 Coding Agent 实验平台。
 
 ## 两种模式
 
@@ -53,12 +53,10 @@ CoreCoder 是一个极简 AI coding agent（~1400 行 Python），逆向工程�
 source .venv/bin/activate
 pip install -e . -q
 cd workspace
-corecoder -m glm-5.1-external
+corecoder
 ```
 
-#### 参考实现：cc-haha
-
-开发新功能时，参考 `/Users/didi/learn-ai/cc-haha`——一个更完整的 Claude Code 源码项目（TypeScript/Bun）。CoreCoder 的每个模块都能在 cc-haha 中找到对应的完整实现，可作为设计参考和实现借鉴。cc-haha 的 `docs/` 目录有更详细的架构说明，开发前建议先读相关章节。
+设计新功能时优先依据公开文档、当前仓库代码和可复现实验，不依赖机器外的私有参考路径。
 
 #### 开发模式工作规范
 
@@ -66,7 +64,7 @@ corecoder -m glm-5.1-external
 - 新功能在 `workspace/` 下验证，不要改 workspace 外的文件做测试
 - 运行 `pytest` 确保不破坏现有功能
 - 新增工具参照 `corecoder/tools/base.py` 的 Tool 基类，并在 `corecoder/tools/__init__.py` 注册
-- 需要设计新功能时，先通过调用子agent探索 cc-haha 对应模块的实现思路，再决定 CoreCoder 的实现方案
+- 新增运行时能力必须补充 Trace 事件与自动化测试
 
 ## 项目结构
 
@@ -100,13 +98,13 @@ dev.sh                开发验证一键启动脚本
 - Python 3.10+，构建系统 hatchling
 - 依赖：openai, rich, prompt_toolkit, python-dotenv
 - 可选：litellm（非 OpenAI 兼容提供商）
-- LLM：glm-5.1-external，OpenAI 兼容格式，Base URL 在 .env 中
+- 默认开发配置：DeepSeek OpenAI 兼容端点，具体模型和密钥只保存在 `.env`
 
 ## 测试
 
 ```bash
 source .venv/bin/activate
-pytest           # 65 个测试
+pytest
 ```
 
 ## 判断用户模式

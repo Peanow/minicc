@@ -10,11 +10,15 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Tests](https://github.com/he-yufeng/CoreCoder/actions/workflows/ci.yml/badge.svg)](https://github.com/he-yufeng/CoreCoder/actions)
 
-**51万行 TypeScript → ~1,400 行 Python。**
+> **分支说明：** 本仓库是在上游
+> [he-yufeng/CoreCoder](https://github.com/he-yufeng/CoreCoder) 基础上的实验性增强
+> Fork。上游提供最小 Agent Loop、基础工具和架构文章；本分支正在扩展实例级
+> 工具注册、Skills、Hooks、长期记忆和结构化 Trace，目标是构建面向多模型、
+> 本地模型的可观测 Coding Agent 实验平台。
 
-我逆向了 Claude Code 泄露的全部源码，然后把不承重的部分全扔掉，用 Python 重建了核心。成果：**Claude Code 的每一个关键架构模式，浓缩在一个下午能读完的代码库里。**
-
-CoreCoder 不仅是一个 AI 编程工具。它是一份**蓝图**，编程 Agent 领域的 [nanoGPT](https://github.com/karpathy/nanoGPT)。读懂它，fork 它，然后造你自己的。
+成熟 Coding Agent 已经证明了产品价值，但上下文、记忆和工具策略通常难以观察、
+修改和复现。本分支不仅关心“能否完成任务”，还关心为什么成功、失败发生在哪一轮、
+消耗了多少上下文，以及切换模型或策略后结果如何变化。
 
 ---
 
@@ -86,6 +90,9 @@ corecoder -m qwen3:32b
 
 # 单次模式
 corecoder -p "给 parse_config() 加上错误处理"
+
+# 同时记录 JSONL 执行轨迹
+corecoder -p "修复测试失败" --trace .tmp/run.jsonl
 ```
 
 ## 架构
@@ -156,10 +163,10 @@ quit             退出
 
 |  | Claude Code | Claw-Code | Aider | CoreCoder |
 |---|---|---|---|---|
-| 代码量 | 51万行（闭源） | 10万+行 | 5万+行 | **~1,400 行** |
+| 代码量 | 51万行（闭源） | 10万+行 | 5万+行 | **最小核心 + 可测试扩展层** |
 | 模型 | 仅 Anthropic | 多模型 | 多模型 | **任意 OpenAI 兼容** |
-| 能通读吗？ | 不能 | 很难 | 有点费劲 | **一个下午** |
-| 适合 | 直接用 | 直接用 | 直接用 | **先看懂，再造自己的** |
+| 能通读吗？ | 不能 | 很难 | 有点费劲 | **模块化 Python** |
+| 适合 | 直接用 | 直接用 | 直接用 | **理解、观测、评测 Agent** |
 
 ## 源码导读
 
@@ -167,11 +174,11 @@ quit             退出
 
 ## FAQ
 
-**CoreCoder 支持 Skill / Subagent / MCP 吗？**
+**这个 Fork 支持哪些扩展能力？**
 
-不支持，这是刻意的。CoreCoder 只保留可运行的最小核心 —— agent 循环、工具、流式、压缩。Skill、Subagent、MCP、hook、plugin 都是 Claude Code 在上层加的特性；如果 CoreCoder 也全都做了，就不再是一个可读的教学产物。上面的架构导读系列讲了 Claude Code 里这些系统是怎么工作的，你可以照着自己加。
-
-如果你只是想要 Skill，配方很简单：启动时扫 `~/.claude/skills/*.md`，把标题列进 system prompt，让 agent 按名字请求某个 skill，再把那个文件的内容 inline 进对话就行了。
+当前支持项目级 Skills、生命周期 Hooks、只读子 Agent、SQLite
+跨会话记忆和 JSONL Trace。MCP、操作系统级沙箱、评测报告与完整 Replay
+仍在后续路线中；当前 Bash 防护属于应用层策略，不能替代容器或 OS 沙箱。
 
 ## License
 

@@ -5,6 +5,10 @@ __version__ = "0.3.0"
 from corecoder.agent import Agent
 from corecoder.llm import LLM
 from corecoder.config import Config
-from corecoder.tools import ALL_TOOLS
+from corecoder.tools import ALL_TOOLS, ToolRegistry
+from corecoder.trace import JsonlTraceSink, RunResult
 
-__all__ = ["Agent", "LLM", "Config", "ALL_TOOLS", "__version__"]
+__all__ = [
+    "Agent", "LLM", "Config", "ALL_TOOLS", "ToolRegistry",
+    "JsonlTraceSink", "RunResult", "__version__",
+]

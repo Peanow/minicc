@@ -14,10 +14,9 @@ from .base import Tool
 class AgentTool(Tool):
     name = "agent"
     description = (
-        "Spawn a sub-agent to handle a complex sub-task independently. "
-        "The sub-agent has its own context and tool access. Use this for: "
-        "researching a codebase, implementing a multi-step change in isolation, "
-        "or any task that would benefit from a fresh context window."
+        "Spawn a read-only sub-agent to research a complex sub-task. "
+        "The sub-agent has an isolated context and read/search tools, and "
+        "returns a concise report without modifying the workspace."
     )
     parameters = {
         "type": "object",
@@ -40,13 +39,23 @@ class AgentTool(Tool):
         # import here to avoid circular dep
         from ..agent import Agent
 
+        from ..tools import build_default_tools
+
         parent = self._parent_agent
+        read_only_names = {"read_file", "glob", "grep"}
+        read_only_tools = [
+            tool for tool in build_default_tools()
+            if tool.name in read_only_names
+        ]
         sub = Agent(
             llm=parent.llm,
-            tools=[t for t in parent.tools if t.name != "agent"],  # no recursive agents
+            tools=read_only_tools,
             max_context_tokens=parent.context.max_tokens,
             max_rounds=20,
-            hooks=parent.hooks,  # inherit hooks from parent
+            hooks=type(parent.hooks)(
+                hooks=dict(parent.hooks.hooks),
+                source=parent.hooks.source,
+            ),
         )
 
         try:

@@ -1,21 +1,8 @@
-"""Cross-session memory with SQLite + FTS5 + ChromaDB semantic search.
+"""Cross-session memory with SQLite, FTS5, and optional embeddings.
 
-Dual-store architecture:
-
-    **SQLite** — full observation content, structured metadata, FTS5
-    keyword index.  The source of truth for complete records.
-
-    **ChromaDB** — vector embeddings + lightweight metadata (project,
-    type).  Used for semantic similarity search only.
-
-Two-stage retrieval:
-
-    1. ChromaDB semantic search → matching observation IDs
-    2. SQLite SELECT by IDs → full content backfill
-
-This mirrors the architecture described in claude-mem where ChromaDB
-handles vector indexing and SQLite (or Postgres) stores the complete
-records.
+SQLite is the single source of truth. Embeddings are stored as float32 BLOBs
+and compared in-process, which is reliable for CoreCoder's small per-project
+memory collections and avoids a second database dependency.
 
 Memory is scoped by *project* (derived from the git root), so different
 projects never see each other's observations.
@@ -29,6 +16,7 @@ import logging
 import os
 import re
 import sqlite3
+import struct
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -45,7 +33,6 @@ logger = logging.getLogger(__name__)
 
 _MEMORY_DIR = Path.home() / ".corecoder" / "memory"
 _DB_NAME = "memory.db"
-_CHROMA_DIR = _MEMORY_DIR / "chroma"
 
 
 def _db_path() -> Path:
@@ -107,6 +94,7 @@ CREATE TABLE IF NOT EXISTS observations (
     session_id TEXT DEFAULT '',
     created_at TEXT NOT NULL,
     content_hash TEXT NOT NULL,
+    embedding BLOB,
     UNIQUE(project, content_hash)
 );
 
@@ -140,13 +128,37 @@ END;
 """
 
 
-class MemoryStore:
-    """Dual-store observation manager: SQLite + ChromaDB.
+def _vec_to_blob(vector: list[float] | None, dims: int) -> bytes | None:
+    """Serialize a vector as little-endian float32."""
+    if vector is None:
+        return None
+    values = [float(value) for value in vector[:dims]]
+    values.extend([0.0] * (dims - len(values)))
+    return struct.pack(f"<{dims}f", *values)
 
-    SQLite stores full content; ChromaDB stores vector embeddings.
-    Searches go to ChromaDB for semantic matching, then SQLite
-    for content backfill.
-    """
+
+def blob_to_vec(blob: bytes | None) -> list[float]:
+    """Deserialize a float32 embedding BLOB."""
+    if not blob:
+        return []
+    count = len(blob) // 4
+    return list(struct.unpack(f"<{count}f", blob))
+
+
+def _cosine_similarity(left: list[float], right: list[float]) -> float:
+    length = min(len(left), len(right))
+    if not length:
+        return 0.0
+    dot = sum(left[i] * right[i] for i in range(length))
+    left_norm = sum(left[i] ** 2 for i in range(length)) ** 0.5
+    right_norm = sum(right[i] ** 2 for i in range(length)) ** 0.5
+    if not left_norm or not right_norm:
+        return 0.0
+    return dot / (left_norm * right_norm)
+
+
+class MemoryStore:
+    """SQLite-backed observation and semantic-memory store."""
 
     def __init__(
         self,
@@ -157,7 +169,6 @@ class MemoryStore:
         self._dims = embedding_dims
         self._path = db_path or _db_path()
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._chroma_dir = chroma_dir or _CHROMA_DIR
 
         # SQLite connection
         self._conn = sqlite3.connect(str(self._path))
@@ -165,36 +176,16 @@ class MemoryStore:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._init_sqlite_schema()
 
-        # ChromaDB — lazy init on first use
-        self._chroma_client = None
-        self._chroma_collection = None
-
-    # ---- ChromaDB lazy init ----
-
-    def _ensure_chroma(self):
-        """Lazy-initialize ChromaDB client and collection."""
-        if self._chroma_client is not None:
-            return
-        try:
-            import chromadb
-            self._chroma_client = chromadb.PersistentClient(path=str(self._chroma_dir))
-            self._chroma_collection = self._chroma_client.get_or_create_collection(
-                name="observations",
-                metadata={"hnsw:space": "cosine"},
-            )
-        except Exception as e:
-            logger.warning("ChromaDB init failed: %s", e)
-            self._chroma_client = None
-            self._chroma_collection = None
-
-    def _chroma_available(self) -> bool:
-        self._ensure_chroma()
-        return self._chroma_collection is not None
-
     # ---- SQLite schema init ----
 
     def _init_sqlite_schema(self):
         self._conn.executescript(_SCHEMA)
+        columns = {
+            row["name"]
+            for row in self._conn.execute("PRAGMA table_info(observations)").fetchall()
+        }
+        if "embedding" not in columns:
+            self._conn.execute("ALTER TABLE observations ADD COLUMN embedding BLOB")
         try:
             self._conn.executescript(_FTS_SCHEMA)
             self._conn.executescript(_FTS_TRIGGERS)
@@ -205,7 +196,7 @@ class MemoryStore:
     # ---- write ----
 
     def save(self, obs: Observation, embedding: list[float] | None = None) -> int | None:
-        """Insert an observation into SQLite and (optionally) ChromaDB.
+        """Insert an observation into SQLite.
 
         Returns the row id, or None on duplicate.
         """
@@ -218,12 +209,13 @@ class MemoryStore:
             cur = self._conn.execute(
                 """INSERT INTO observations
                    (project, kind, type, title, content, files, session_id,
-                    created_at, content_hash)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    created_at, content_hash, embedding)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     obs.project, obs.kind, obs.type, obs.title, obs.content,
                     json.dumps(obs.files), obs.session_id,
                     obs.created_at, obs.content_hash,
+                    _vec_to_blob(embedding, self._dims),
                 ),
             )
             self._conn.commit()
@@ -231,32 +223,7 @@ class MemoryStore:
         except sqlite3.IntegrityError:
             return None
 
-        # write to ChromaDB if embedding provided
-        if embedding and self._chroma_available():
-            self._save_to_chroma(row_id, obs, embedding)
-
         return row_id
-
-    def _save_to_chroma(
-        self,
-        row_id: int,
-        obs: Observation,
-        embedding: list[float],
-    ):
-        """Persist vector + metadata to ChromaDB."""
-        try:
-            self._chroma_collection.upsert(
-                ids=[str(row_id)],
-                embeddings=[embedding],
-                metadatas=[{
-                    "project": obs.project,
-                    "type": obs.type,
-                    "kind": obs.kind,
-                }],
-                documents=[f"{obs.title}: {obs.content}"],
-            )
-        except Exception as e:
-            logger.warning("ChromaDB upsert failed: %s", e)
 
     def save_many(
         self,
@@ -295,7 +262,7 @@ class MemoryStore:
         ]
 
     def get_by_ids(self, ids: list[int]) -> list[Observation]:
-        """Fetch full observations by IDs. Used after ChromaDB semantic match."""
+        """Fetch full observations by IDs."""
         if not ids:
             return []
         placeholders = ",".join("?" * len(ids))
@@ -344,46 +311,20 @@ class MemoryStore:
         query_embedding: list[float],
         limit: int = 10,
     ) -> list[Observation]:
-        """Two-stage semantic search: ChromaDB → SQLite backfill.
-
-        1. Query ChromaDB for matching IDs by cosine similarity
-        2. Fetch full content from SQLite by those IDs
-        """
-        if not self._chroma_available():
-            return []
-
-        try:
-            results = self._chroma_collection.query(
-                query_embeddings=[query_embedding],
-                where={"project": project},
-                n_results=limit,
-                include=["distances", "metadatas"],
+        """Compare a query vector with this project's stored embeddings."""
+        rows = self._conn.execute(
+            "SELECT * FROM observations WHERE project = ? AND embedding IS NOT NULL",
+            (project,),
+        ).fetchall()
+        scored: list[Observation] = []
+        for row in rows:
+            obs = _row_to_obs(row)
+            obs.score = round(
+                _cosine_similarity(query_embedding, blob_to_vec(row["embedding"])),
+                4,
             )
-        except Exception as e:
-            logger.warning("ChromaDB query failed: %s", e)
-            return []
-
-        if not results["ids"] or not results["ids"][0]:
-            return []
-
-        # two-stage: ChromaDB gave us IDs → SQLite backfills full content
-        chroma_ids = results["ids"][0]
-        chroma_distances = results["distances"][0]
-        obs_ids = [int(i) for i in chroma_ids]
-
-        observations = self.get_by_ids(obs_ids)
-
-        # attach similarity scores (1 - distance for cosine)
-        id_to_obs = {o.id: o for o in observations}
-        scored = []
-        for cid, dist in zip(chroma_ids, chroma_distances):
-            oid = int(cid)
-            if oid in id_to_obs:
-                obs = id_to_obs[oid]
-                obs.score = round(1.0 - dist, 4)
-                scored.append(obs)
-
-        return scored
+            scored.append(obs)
+        return sorted(scored, key=lambda obs: obs.score, reverse=True)[:limit]
 
     def hybrid_search(
         self,
@@ -392,7 +333,7 @@ class MemoryStore:
         query_embedding: list[float] | None = None,
         limit: int = 10,
     ) -> list[Observation]:
-        """Combine FTS5 keyword and ChromaDB semantic search."""
+        """Combine FTS5 keyword and vector similarity search."""
         seen_ids: dict[int, Observation] = {}
 
         # FTS5 results
@@ -401,7 +342,7 @@ class MemoryStore:
             obs.score = max(obs.score, 0.5)
             seen_ids[obs.id] = obs
 
-        # Semantic results via ChromaDB
+        # Semantic results from SQLite embedding BLOBs
         if query_embedding:
             sem_results = self.semantic_search(project, query_embedding, limit=limit * 2)
             for obs in sem_results:
@@ -419,23 +360,10 @@ class MemoryStore:
     def delete_project(self, project: str) -> int:
         count = self.count(project)
 
-        # collect IDs before deleting from SQLite
-        rows = self._conn.execute(
-            "SELECT id FROM observations WHERE project = ?", (project,),
-        ).fetchall()
-        ids_to_delete = [str(r["id"]) for r in rows]
-
         self._conn.execute(
             "DELETE FROM observations WHERE project = ?", (project,),
         )
         self._conn.commit()
-
-        # also delete from ChromaDB
-        if ids_to_delete and self._chroma_available():
-            try:
-                self._chroma_collection.delete(ids=ids_to_delete)
-            except Exception as e:
-                logger.warning("ChromaDB delete failed: %s", e)
 
         return count
 

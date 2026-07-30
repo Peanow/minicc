@@ -10,11 +10,16 @@
 
 [中文](README_CN.md) | [English](README.md) | [Claude Code Architecture Deep Dive (7 articles)](article/)
 
-**512,000 lines of TypeScript → ~1,400 lines of Python.**
+> **Fork notice:** This repository is an experimental extension of
+> [he-yufeng/CoreCoder](https://github.com/he-yufeng/CoreCoder). The upstream
+> project provides the minimal agent loop, base tools, and architecture
+> articles. This fork adds instance-local tools, skills, hooks, cross-session
+> memory, and structured traces toward an observable multi-model coding-agent
+> experimentation platform.
 
-I spent two days reverse-engineering the leaked Claude Code source — all half a million lines. Then I stripped it down to the load-bearing walls and rebuilt them in Python. The result: **every key architectural pattern from Claude Code, in a codebase you can read in one sitting.**
-
-CoreCoder is not another AI coding tool. It's a **blueprint** — the [nanoGPT](https://github.com/karpathy/nanoGPT) of coding agents. Read it, fork it, build your own.
+The focus is not only whether an agent completes a task, but why it succeeds,
+where it fails, how much context it consumes, and how model or strategy changes
+affect the result.
 
 ---
 
@@ -37,7 +42,8 @@ Fixed: halper → helper.
 
 ## What You Get
 
-Claude Code's 512K lines distilled into ~1,400 lines across 7 patterns that actually matter:
+The upstream minimal core distills seven architectural patterns; this fork adds
+experimental strategy and observability layers:
 
 | Pattern | Claude Code | CoreCoder |
 |---|---|---|
@@ -171,10 +177,10 @@ Saved session IDs are sanitized before they become filenames, so resume data sta
 
 |  | Claude Code | Claw-Code | Aider | CoreCoder |
 |---|---|---|---|---|
-| Code | 512K lines (closed) | 100K+ lines | 50K+ lines | **~1,400 lines** |
+| Code | 512K lines (closed) | 100K+ lines | 50K+ lines | **Minimal core + testable extensions** |
 | Models | Anthropic only | Multi | Multi | **Any OpenAI-compatible** |
-| Readable? | No | Hard | Medium | **One afternoon** |
-| Purpose | Use it | Use it | Use it | **Understand it, build yours** |
+| Readable? | No | Hard | Medium | **Small, modular Python** |
+| Purpose | Use it | Use it | Use it | **Understand, instrument, evaluate** |
 
 ## The Deep Dive
 
@@ -182,11 +188,12 @@ I wrote [7 articles](article/) breaking down Claude Code's architecture — the 
 
 ## FAQ
 
-**Does CoreCoder support Skills / Subagents / MCP?**
+**Which extension features does this fork support?**
 
-No, and that's intentional. CoreCoder is the minimal runnable core — agent loop, tools, streaming, compaction. Skills, Subagents, MCP, hooks, and plugins are upper-layer features that Claude Code layers on top; if CoreCoder had them too it would stop being a teaching artifact. The architecture articles above cover how those systems work in Claude Code, so you can add them yourself if you need to.
-
-If you want Skills specifically, the recipe is small: scan `~/.claude/skills/*.md` at startup, list their titles in the system prompt, and let the agent ask for a skill by name before you inline that file's body into the conversation.
+It currently supports project skills, lifecycle hooks, read-only subagents,
+SQLite cross-session memory, and JSONL execution traces. MCP, an OS-level
+sandbox, evaluation reports, and full replay remain roadmap items. The current
+Bash checks are an application policy layer, not a security sandbox.
 
 ## Related Projects
 

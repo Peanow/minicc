@@ -21,6 +21,7 @@ from .tools.skill import SkillTool
 from .memory import MemoryStore, get_project_name, format_memory_context
 from .embedding import EmbeddingService
 from .prompt import system_prompt
+from .trace import JsonlTraceSink
 from . import __version__
 
 console = Console()
@@ -36,6 +37,7 @@ def _parse_args():
     p.add_argument("--api-key", help="API key (default: $OPENAI_API_KEY)")
     p.add_argument("-p", "--prompt", help="One-shot prompt (non-interactive mode)")
     p.add_argument("-r", "--resume", metavar="ID", help="Resume a saved session")
+    p.add_argument("--trace", metavar="PATH", help="Write a structured JSONL execution trace")
     p.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
     return p.parse_args()
 
@@ -85,12 +87,14 @@ def main():
         base_url=config.base_url,
     )
 
+    trace = JsonlTraceSink(args.trace) if args.trace else None
     agent = Agent(
         llm=llm,
         max_context_tokens=config.max_context_tokens,
         skills=discover_skills(),
         hooks=load_hooks(),
         embedding=embedding,
+        trace=trace,
     )
 
     # fire SessionStart hooks
@@ -114,11 +118,19 @@ def main():
 
     # one-shot mode
     if args.prompt:
-        _run_once(agent, args.prompt)
+        try:
+            _run_once(agent, args.prompt)
+        finally:
+            agent.close()
+            agent.trace.close()
         return
 
     # interactive REPL
-    _repl(agent, config)
+    try:
+        _repl(agent, config)
+    finally:
+        agent.close()
+        agent.trace.close()
 
 
 def _run_once(agent: Agent, prompt: str):
@@ -217,12 +229,12 @@ def _repl(agent: Agent, config: Config):
             console.print(f"Resume with: corecoder -r {sid}")
             continue
         if user_input == "/diff":
-            from .tools.edit import _changed_files
-            if not _changed_files:
+            changed_files = agent.changed_files
+            if not changed_files:
                 console.print("[dim]No files modified this session.[/dim]")
             else:
-                console.print(f"[bold]Files modified this session ({len(_changed_files)}):[/bold]")
-                for f in sorted(_changed_files):
+                console.print(f"[bold]Files modified this session ({len(changed_files)}):[/bold]")
+                for f in sorted(changed_files):
                     console.print(f"  [cyan]{f}[/cyan]")
             continue
         if user_input == "/sessions":

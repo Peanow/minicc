@@ -34,7 +34,7 @@ class Config:
     temperature: float = 0.0
     max_context_tokens: int = 128_000
     provider: str = "openai"
-    embedding_provider: str = "local"     # "local" | "api" | "none"
+    embedding_provider: str = "none"      # "local" | "api" | "none"
     embedding_model: str = "BAAI/bge-small-zh-v1.5"
     embedding_dims: int = 512
 
@@ -57,7 +57,7 @@ class Config:
             temperature=float(os.getenv("CORECODER_TEMPERATURE", "0")),
             max_context_tokens=int(os.getenv("CORECODER_MAX_CONTEXT", "128000")),
             provider=os.getenv("CORECODER_PROVIDER", "openai"),
-            embedding_provider=os.getenv("CORECODER_EMBEDDING_PROVIDER", "local"),
+            embedding_provider=os.getenv("CORECODER_EMBEDDING_PROVIDER", "none"),
             embedding_model=os.getenv("CORECODER_EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5"),
             embedding_dims=int(os.getenv("CORECODER_EMBEDDING_DIMS", "512")),
         )

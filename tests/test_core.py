@@ -3,7 +3,7 @@
 import os
 import pathlib
 
-from corecoder import Agent, LLM, Config, ALL_TOOLS, __version__
+from corecoder import Agent, LLM, Config, ALL_TOOLS, ToolRegistry, __version__
 from corecoder.context import ContextManager, estimate_tokens
 from corecoder.session import save_session, load_session, list_sessions
 from corecoder.tools import get_tool
@@ -18,6 +18,7 @@ def test_public_api_exports():
     assert Agent is not None
     assert LLM is not None
     assert Config is not None
+    assert ToolRegistry is not None
     assert len(ALL_TOOLS) == 10
 
 
@@ -28,7 +29,10 @@ def test_config_from_env():
     del os.environ["CORECODER_MODEL"]
 
 
-def test_config_defaults():
+def test_config_defaults(monkeypatch):
+    import corecoder.config as config_module
+
+    monkeypatch.setattr(config_module, "_load_dotenv", lambda: None)
     # temporarily clear relevant env vars
     saved = {}
     for k in ["CORECODER_MODEL", "CORECODER_MAX_TOKENS"]:
@@ -78,7 +82,10 @@ def test_context_compress():
 
 # --- Session ---
 
-def test_session_save_load():
+def test_session_save_load(tmp_path, monkeypatch):
+    import corecoder.session as session_module
+
+    monkeypatch.setattr(session_module, "SESSIONS_DIR", tmp_path / "sessions")
     msgs = [{"role": "user", "content": "test message"}]
     sid = save_session(msgs, "test-model", "pytest_test_session")
     loaded = load_session("pytest_test_session")
@@ -86,15 +93,18 @@ def test_session_save_load():
     assert loaded[0] == msgs
     assert loaded[1] == "test-model"
     # cleanup
-    pathlib.Path.home().joinpath(".corecoder/sessions/pytest_test_session.json").unlink()
+    (tmp_path / "sessions" / "pytest_test_session.json").unlink()
 
 
-def test_session_name_is_sanitized():
+def test_session_name_is_sanitized(tmp_path, monkeypatch):
+    import corecoder.session as session_module
+
+    monkeypatch.setattr(session_module, "SESSIONS_DIR", tmp_path / "sessions")
     msgs = [{"role": "user", "content": "test message"}]
     sid = save_session(msgs, "test-model", "../Research Notes!")
 
     assert sid == "Research-Notes"
-    path = pathlib.Path.home().joinpath(".corecoder/sessions/Research-Notes.json")
+    path = tmp_path / "sessions" / "Research-Notes.json"
     assert path.exists()
     assert load_session("../Research Notes!") is not None
     path.unlink()

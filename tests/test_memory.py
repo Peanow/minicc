@@ -6,8 +6,6 @@ import tempfile
 import time
 from pathlib import Path
 
-import numpy as np
-
 from corecoder.memory import (
     MemoryStore,
     Observation,
@@ -478,11 +476,14 @@ def test_agent_has_memory_directory():
     assert not agent._memory_injected
 
 
-def test_agent_on_demand_injection():
+def test_agent_on_demand_injection(tmp_path, monkeypatch):
     """First chat() triggers semantic memory injection."""
     from corecoder.agent import Agent
     from corecoder.llm import LLM
     from corecoder.memory import MemoryStore
+    import corecoder.memory as memory_module
+
+    monkeypatch.setattr(memory_module, "_MEMORY_DIR", tmp_path / "memory")
 
     llm = LLM(model="test", api_key="test")
     agent = Agent(llm=llm, embedding=None)

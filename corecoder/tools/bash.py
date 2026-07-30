@@ -12,9 +12,6 @@ import re
 import subprocess
 from .base import Tool
 
-# track cwd across commands (Claude Code does this too)
-_cwd: str | None = None
-
 # patterns that could wreck the filesystem or leak secrets
 _DANGEROUS_PATTERNS = [
     (r"\brm\s+(-\w*)?-r\w*\s+(/|~|\$HOME)", "recursive delete on home/root"),
@@ -50,15 +47,17 @@ class BashTool(Tool):
         "required": ["command"],
     }
 
+    def __init__(self):
+        self._cwd: str | None = None
+
     def execute(self, command: str, timeout: int = 120) -> str:
-        global _cwd
         # safety check
         warning = _check_dangerous(command)
         if warning:
             return f"⚠ Blocked: {warning}\nCommand: {command}\nIf intentional, modify the command to be more specific."
 
         # use tracked working directory
-        cwd = _cwd or os.getcwd()
+        cwd = self._cwd or os.getcwd()
 
         try:
             proc = subprocess.run(
@@ -72,7 +71,7 @@ class BashTool(Tool):
 
             # track cd commands so next command runs in the right place
             if proc.returncode == 0:
-                _update_cwd(command, cwd)
+                self._update_cwd(command, cwd)
             out = proc.stdout
             if proc.stderr:
                 out += f"\n[stderr]\n{proc.stderr}"
@@ -91,6 +90,21 @@ class BashTool(Tool):
         except Exception as e:
             return f"Error running command: {e}"
 
+    def _update_cwd(self, command: str, current_cwd: str):
+        """Track directory changes from cd commands."""
+        # simple heuristic: look for cd at the end of an && chain or standalone
+        parts = command.split("&&")
+        for part in parts:
+            part = part.strip()
+            if part.startswith("cd "):
+                target = part[3:].strip().strip("'\"")
+                if target:
+                    new_dir = os.path.normpath(
+                        os.path.join(current_cwd, os.path.expanduser(target))
+                    )
+                    if os.path.isdir(new_dir):
+                        self._cwd = new_dir
+
 
 def _check_dangerous(cmd: str) -> str | None:
     """Return a warning string if the command looks destructive, else None."""
@@ -98,18 +112,3 @@ def _check_dangerous(cmd: str) -> str | None:
         if re.search(pattern, cmd):
             return reason
     return None
-
-
-def _update_cwd(command: str, current_cwd: str):
-    """Track directory changes from cd commands."""
-    global _cwd
-    # simple heuristic: look for cd at the end of a && chain or standalone
-    parts = command.split("&&")
-    for part in parts:
-        part = part.strip()
-        if part.startswith("cd "):
-            target = part[3:].strip().strip("'\"")
-            if target:
-                new_dir = os.path.normpath(os.path.join(current_cwd, os.path.expanduser(target)))
-                if os.path.isdir(new_dir):
-                    _cwd = new_dir

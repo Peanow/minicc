@@ -41,6 +41,9 @@ class EditFileTool(Tool):
         "required": ["file_path", "old_string", "new_string"],
     }
 
+    def __init__(self, changed_files: set[str] | None = None):
+        self.changed_files = changed_files if changed_files is not None else _changed_files
+
     def execute(self, file_path: str, old_string: str, new_string: str) -> str:
         try:
             p = Path(file_path).expanduser().resolve()
@@ -64,7 +67,7 @@ class EditFileTool(Tool):
 
             new_content = content.replace(old_string, new_string, 1)
             p.write_text(new_content)
-            _changed_files.add(str(p))
+            self.changed_files.add(str(p))
 
             # generate a unified diff so the user/LLM can see exactly what changed
             diff = _unified_diff(content, new_content, str(p))

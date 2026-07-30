@@ -26,12 +26,15 @@ class WriteFileTool(Tool):
         "required": ["file_path", "content"],
     }
 
+    def __init__(self, changed_files: set[str] | None = None):
+        self.changed_files = changed_files if changed_files is not None else _changed_files
+
     def execute(self, file_path: str, content: str) -> str:
         try:
             p = Path(file_path).expanduser().resolve()
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(content)
-            _changed_files.add(str(p))
+            self.changed_files.add(str(p))
             n_lines = content.count("\n") + (1 if content and not content.endswith("\n") else 0)
             return f"Wrote {n_lines} lines to {file_path}"
         except Exception as e:

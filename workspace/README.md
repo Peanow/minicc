@@ -12,7 +12,7 @@ CoreCoder 功能验证目录。在此目录下启动 CoreCoder，所有文件操
 
 ```bash
 source ../.venv/bin/activate
-corecoder -m glm-5.1-external
+corecoder
 ```
 
 ## 验证清单

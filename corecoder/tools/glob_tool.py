@@ -5,6 +5,7 @@ from .base import Tool
 
 
 class GlobTool(Tool):
+    parallel_safe = True
     name = "glob"
     description = (
         "Find files matching a glob pattern. "

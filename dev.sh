@@ -20,5 +20,5 @@ pip install -e . -q
 # 进入 workspace 验证目录
 cd workspace
 
-# 启动 corecoder
-corecoder -m glm-5.1-external
+# 启动 corecoder（模型与端点从 .env 读取）
+corecoder

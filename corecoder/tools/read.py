@@ -5,6 +5,7 @@ from .base import Tool
 
 
 class ReadFileTool(Tool):
+    parallel_safe = True
     name = "read_file"
     description = (
         "Read a file's contents with line numbers. "
