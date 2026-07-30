@@ -30,6 +30,19 @@ class EchoTool(Tool):
         return f"echo:{text}"
 
 
+class ValidationTool(Tool):
+    name = "bash"
+    description = "Record a validation command without executing it."
+    parameters = {
+        "type": "object",
+        "properties": {"command": {"type": "string"}},
+        "required": ["command"],
+    }
+
+    def execute(self, command: str) -> str:
+        return f"validated:{command}"
+
+
 class FakeLLM:
     model = "fake-model"
     total_prompt_tokens = 0
@@ -91,6 +104,24 @@ def test_agent_executes_its_private_tool_registry():
     assert tool_event["data"]["output"] == "echo:hello"
     policy_event = next(e for e in trace.events if e["event"] == "policy_decision")
     assert policy_event["data"]["risk"] == "unknown"
+
+
+def test_workspace_validation_allowance_is_visible_in_trace():
+    trace = InMemoryTraceSink()
+    agent = Agent(llm=FakeLLM(), tools=[ValidationTool()], trace=trace)
+
+    output = agent._exec_tool(ToolCall(
+        id="validation-1",
+        name="bash",
+        arguments={"command": "python -m pytest -q"},
+    ))
+
+    assert output == "validated:python -m pytest -q"
+    policy_event = next(
+        event for event in trace.events if event["event"] == "policy_decision"
+    )
+    assert policy_event["data"]["decision"] == "allow"
+    assert policy_event["data"]["risk"] == "workspace-validation"
 
 
 def test_jsonl_trace_is_append_only_and_redacted(tmp_path):

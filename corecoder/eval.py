@@ -22,6 +22,13 @@ from .trace import JsonlTraceSink
 
 SCHEMA_VERSION = 1
 _SENSITIVE_ENV_MARKERS = ("API_KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
+_GENERATED_PATH_PARTS = {
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+}
+_GENERATED_FILE_NAMES = {".coverage", ".DS_Store"}
 
 
 @dataclass(frozen=True)
@@ -139,6 +146,7 @@ class EvalRecord:
     hidden_checks_passed: int = 0
     hidden_checks_total: int = 0
     workspace_changed_files: list[str] = field(default_factory=list)
+    ignored_generated_files: list[str] = field(default_factory=list)
     expected_change_paths: list[str] = field(default_factory=list)
     unrelated_changed_files: list[str] = field(default_factory=list)
     edit_precision: float = 0.0
@@ -707,15 +715,22 @@ def _file_digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _is_generated_artifact(relative_path: str | Path) -> bool:
+    relative = Path(relative_path)
+    return (
+        bool(_GENERATED_PATH_PARTS.intersection(relative.parts))
+        or relative.name in _GENERATED_FILE_NAMES
+        or relative.suffix in {".pyc", ".pyo"}
+    )
+
+
 def _tree_digest(path: Path) -> str:
     digest = hashlib.sha256()
     files = sorted(
         entry
         for entry in path.rglob("*")
         if entry.is_file()
-        and "__pycache__" not in entry.parts
-        and entry.suffix != ".pyc"
-        and entry.name != ".DS_Store"
+        and not _is_generated_artifact(entry.relative_to(path))
     )
     for entry in files:
         digest.update(str(entry.relative_to(path)).encode("utf-8"))
@@ -725,14 +740,19 @@ def _tree_digest(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _tree_file_digests(path: Path) -> dict[str, str]:
+def _tree_file_digests(
+    path: Path,
+    *,
+    include_generated: bool = False,
+) -> dict[str, str]:
     return {
         str(entry.relative_to(path)): _file_digest(entry)
         for entry in sorted(path.rglob("*"))
         if entry.is_file()
-        and "__pycache__" not in entry.parts
-        and entry.suffix != ".pyc"
-        and entry.name != ".DS_Store"
+        and (
+            include_generated
+            or not _is_generated_artifact(entry.relative_to(path))
+        )
     }
 
 
@@ -871,7 +891,10 @@ def run_case(case: EvalCase, output_dir: Path) -> EvalRecord:
             symlinks=True,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"),
         )
-        workspace_before = _tree_file_digests(workspace)
+        workspace_before = _tree_file_digests(
+            workspace,
+            include_generated=True,
+        )
         protected_digests = {
             relative: _file_digest(workspace / relative)
             for relative in case.task.protected_paths
@@ -995,9 +1018,17 @@ def run_case(case: EvalCase, output_dir: Path) -> EvalRecord:
                     })
 
         wall_duration_ms = round((time.perf_counter() - started) * 1000, 2)
-        workspace_changed_files = _changed_tree_files(
+        raw_workspace_changes = _changed_tree_files(
             workspace_before,
-            _tree_file_digests(workspace),
+            _tree_file_digests(workspace, include_generated=True),
+        )
+        ignored_generated_files = sorted(
+            path
+            for path in raw_workspace_changes
+            if _is_generated_artifact(path)
+        )
+        workspace_changed_files = sorted(
+            set(raw_workspace_changes) - set(ignored_generated_files)
         )
         protected_files_unchanged = all(
             (workspace / relative).is_file()
@@ -1049,6 +1080,7 @@ def run_case(case: EvalCase, output_dir: Path) -> EvalRecord:
             hidden_checks_passed=sum(check["passed"] for check in hidden_checks),
             hidden_checks_total=len(case.task.hidden_checks),
             workspace_changed_files=workspace_changed_files,
+            ignored_generated_files=ignored_generated_files,
             unrelated_changed_files=unrelated_files,
             edit_precision=edit_precision,
             unrelated_file_modification_rate=unrelated_rate,
@@ -1090,6 +1122,7 @@ def run_case(case: EvalCase, output_dir: Path) -> EvalRecord:
         hidden_checks_passed=sum(check["passed"] for check in hidden_checks),
         hidden_checks_total=len(case.task.hidden_checks),
         workspace_changed_files=workspace_changed_files,
+        ignored_generated_files=ignored_generated_files,
         expected_change_paths=[
             str(path) for path in case.task.expected_change_paths
         ],

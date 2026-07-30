@@ -285,6 +285,9 @@ def test_run_case_rejects_modified_verifier(tmp_path, monkeypatch):
             sink.emit("run_finished", status="completed", changed_files=["verify.py"])
             sink.close()
             (cwd / "verify.py").write_text("pass\n")
+            cache = cwd / ".pytest_cache"
+            cache.mkdir()
+            (cache / "CACHEDIR.TAG").write_text("generated\n")
         return subprocess.CompletedProcess(argv, 0, "", "")
 
     monkeypatch.setattr(eval_module, "_run_command", fake_run)
@@ -294,6 +297,7 @@ def test_run_case_rejects_modified_verifier(tmp_path, monkeypatch):
     assert not record.protected_files_unchanged
     assert record.changed_files == ["verify.py"]
     assert record.workspace_changed_files == ["verify.py"]
+    assert record.ignored_generated_files == [".pytest_cache/CACHEDIR.TAG"]
     assert record.unrelated_file_modification_rate == 1.0
     assert record.hidden_checks_total == 1
     assert seen_environments[0]["CORECODER_MAX_CONTEXT"] == "32000"
@@ -301,6 +305,9 @@ def test_run_case_rejects_modified_verifier(tmp_path, monkeypatch):
     events = load_trace(tmp_path / record.trace_path)
     measured = events[-1]
     assert measured["event"] == "evaluation_measured"
+    assert measured["data"]["ignored_generated_files"] == [
+        ".pytest_cache/CACHEDIR.TAG"
+    ]
     assert measured["data"]["unrelated_file_modification_rate"] == 1.0
 
 

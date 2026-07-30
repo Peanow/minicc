@@ -39,6 +39,10 @@ corecoder eval benchmarks/tier2-pilot.json --dry-run --repeat 1
 Its curated snapshot records the upstream commit, PR, and Apache-2.0 license
 in both the manifest and `UPSTREAM.md`.
 
+Edit metrics exclude known generated artifacts such as `__pycache__`,
+`.pytest_cache`, coverage data, and compiled Python files. Excluded paths are
+still recorded as `ignored_generated_files` in each result and Trace event.
+
 ## Run cases
 
 ```bash

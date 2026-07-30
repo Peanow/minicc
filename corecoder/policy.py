@@ -23,6 +23,7 @@ class Decision(str, Enum):
 
 class RiskClass(str, Enum):
     READ_ONLY = "read-only"
+    VALIDATION = "workspace-validation"
     WORKSPACE_EXECUTION = "workspace-execution"
     NETWORK = "network"
     DESTRUCTIVE = "destructive"
@@ -59,10 +60,11 @@ class ExecutionPolicy:
         "curl", "wget", "ssh", "scp", "sftp", "nc", "ncat", "telnet",
     }
     _WORKSPACE_EXECUTION_COMMANDS = {
-        "python", "python3", "pytest", "tox", "nox", "make",
+        "python", "python3", "tox", "nox", "make",
         "node", "deno", "bun", "cargo", "go", "java", "mvn", "gradle",
         "sh", "bash", "zsh",
     }
+    _VALIDATION_COMMANDS = {"pytest", "py.test"}
     _DESTRUCTIVE_COMMANDS = {
         "rm", "rmdir", "shred", "mkfs", "dd", "chmod", "chown",
     }
@@ -194,7 +196,7 @@ class ExecutionPolicy:
             )
         risk, detail = self.classify_shell(command)
         if self.mode == PermissionMode.WORKSPACE_WRITE:
-            if risk == RiskClass.READ_ONLY:
+            if risk in {RiskClass.READ_ONLY, RiskClass.VALIDATION}:
                 return PolicyDecision(
                     Decision.ALLOW,
                     detail,
@@ -293,6 +295,18 @@ class ExecutionPolicy:
             ):
                 return RiskClass.WORKSPACE_EXECUTION, "find executes another command"
             return RiskClass.READ_ONLY, f"allowlisted read-only command: {executable}"
+        if executable in cls._VALIDATION_COMMANDS:
+            return RiskClass.VALIDATION, f"workspace test execution: {executable}"
+        if (
+            executable in {"python", "python3"}
+            and len(arguments) >= 2
+            and arguments[0] == "-m"
+            and arguments[1] in {"pytest", "unittest"}
+        ):
+            return (
+                RiskClass.VALIDATION,
+                f"workspace test execution: {executable} -m {arguments[1]}",
+            )
         if executable in cls._WORKSPACE_EXECUTION_COMMANDS:
             return RiskClass.WORKSPACE_EXECUTION, f"workspace code execution: {executable}"
         return RiskClass.UNKNOWN, f"unclassified command: {executable}"

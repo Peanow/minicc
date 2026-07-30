@@ -39,16 +39,21 @@ def test_workspace_write_rejects_symlink_escape(tmp_path):
     assert result.decision == Decision.DENY
 
 
-def test_shell_requires_approval_in_workspace_write(tmp_path):
+def test_workspace_write_allows_tests_but_requires_approval_for_arbitrary_code(tmp_path):
     denied = ExecutionPolicy("workspace-write", workspace=tmp_path)
-    assert denied.authorize("bash", {"command": "pytest"}).decision == Decision.DENY
+    test_decision = denied.authorize("bash", {"command": "pytest -q"})
+    assert test_decision.decision == Decision.ALLOW
+    assert test_decision.risk == RiskClass.VALIDATION
+    assert denied.authorize(
+        "bash", {"command": "python app.py"}
+    ).decision == Decision.DENY
 
     approved = ExecutionPolicy(
         "workspace-write",
         workspace=tmp_path,
         approval_callback=lambda tool, arguments, reason: True,
     )
-    decision = approved.authorize("bash", {"command": "pytest"})
+    decision = approved.authorize("bash", {"command": "python app.py"})
     assert decision.decision == Decision.ALLOW
     assert "user approved" in decision.reason
     assert decision.risk == RiskClass.WORKSPACE_EXECUTION
@@ -76,7 +81,9 @@ def test_read_only_bash_has_small_allowlist(tmp_path):
         ("sed -n 1,20p app.py", RiskClass.READ_ONLY),
         ("sed -i s/old/new/ app.py", RiskClass.WORKSPACE_EXECUTION),
         ("python verify.py", RiskClass.WORKSPACE_EXECUTION),
-        ("pytest -q", RiskClass.WORKSPACE_EXECUTION),
+        ("pytest -q", RiskClass.VALIDATION),
+        ("python -m pytest -q", RiskClass.VALIDATION),
+        ("python3 -m unittest", RiskClass.VALIDATION),
         ("git branch feature", RiskClass.WORKSPACE_EXECUTION),
         ("curl https://example.com", RiskClass.NETWORK),
         ("git pull", RiskClass.NETWORK),
