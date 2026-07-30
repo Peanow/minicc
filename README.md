@@ -106,8 +106,10 @@ corecoder compare benchmarks/results/run-a benchmarks/results/run-b \
 ```
 
 The report groups success, tokens, wall time, optional cost, policy denials,
-and verifier-integrity failures by model/strategy, then builds a per-task
-outcome matrix.
+verifier-integrity failures, hidden-check pass rate, edit precision, unrelated
+edits, failure recovery, and context compactions by model/strategy, then builds
+a per-task outcome matrix. Tier 1 repeats `hybrid`, `truncate`, and `summary`
+three times under the same token budget.
 
 Before committing benchmark evidence, audit the source traces and export only
 portable metrics and hashes:

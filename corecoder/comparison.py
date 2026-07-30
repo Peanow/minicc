@@ -22,6 +22,11 @@ class ProfileMetrics:
     policy_denials: int
     policy_denials_by_risk: dict[str, int]
     integrity_failures: int
+    hidden_pass_rate: float | None
+    mean_edit_precision: float | None
+    mean_unrelated_file_modification_rate: float | None
+    failure_recovery_rate: float | None
+    context_compactions: int
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -154,6 +159,28 @@ def summarize_comparison(
                 not bool(record.get("protected_files_unchanged", True))
                 for record in group
             ),
+            hidden_pass_rate=_ratio(
+                sum(
+                    int(record.get("hidden_checks_passed") or 0)
+                    for record in group
+                ),
+                sum(
+                    int(record.get("hidden_checks_total") or 0)
+                    for record in group
+                ),
+            ),
+            mean_edit_precision=_mean(group, "edit_precision"),
+            mean_unrelated_file_modification_rate=_mean(
+                group,
+                "unrelated_file_modification_rate",
+            ),
+            failure_recovery_rate=_ratio(
+                sum(record.get("failure_recovered") is True for record in group),
+                sum(int(record.get("tool_failures") or 0) > 0 for record in group),
+            ),
+            context_compactions=sum(
+                int(record.get("context_compactions") or 0) for record in group
+            ),
         ))
     return ComparisonSummary(
         source_count=source_count,
@@ -169,6 +196,28 @@ def _format_cost(value: float | None) -> str:
 
 def _format_risks(values: dict[str, int]) -> str:
     return ", ".join(f"{risk}: {count}" for risk, count in values.items()) or "—"
+
+
+def _ratio(numerator: int, denominator: int) -> float | None:
+    return round(numerator / denominator, 4) if denominator else None
+
+
+def _mean(records: list[dict], field: str) -> float | None:
+    values = [
+        float(record[field])
+        for record in records
+        if record.get(field) is not None
+    ]
+    if not values:
+        return None
+    return round(
+        sum(values) / len(values),
+        4,
+    )
+
+
+def _format_rate(value: float | None) -> str:
+    return "n/a" if value is None else f"{value * 100:.1f}%"
 
 
 def generate_comparison_report(
@@ -192,6 +241,13 @@ def generate_comparison_report(
         f"<td>{profile.policy_denials}</td>"
         f"<td>{html.escape(_format_risks(profile.policy_denials_by_risk))}</td>"
         f"<td>{profile.integrity_failures}</td>"
+        f"<td>{html.escape(_format_rate(profile.hidden_pass_rate))}</td>"
+        f"<td>{html.escape(_format_rate(profile.mean_edit_precision))}</td>"
+        "<td>"
+        f"{html.escape(_format_rate(profile.mean_unrelated_file_modification_rate))}"
+        "</td>"
+        f"<td>{html.escape(_format_rate(profile.failure_recovery_rate))}</td>"
+        f"<td>{profile.context_compactions}</td>"
         "</tr>"
         for profile in summary.profiles
     )
@@ -253,7 +309,9 @@ border-bottom:0 }} .pass {{ color:var(--good);font-weight:700 }}
 <div class="table-wrap"><table>
 <thead><tr><th>Model / strategy</th><th>Passed</th><th>Success</th>
 <th>Tokens</th><th>Wall time</th><th>Cost</th><th>Policy denials</th>
-<th>Denied risk classes</th><th>Integrity failures</th></tr></thead>
+<th>Denied risk classes</th><th>Integrity failures</th><th>Hidden pass</th>
+<th>Edit precision</th><th>Unrelated edits</th><th>Failure recovery</th>
+<th>Compactions</th></tr></thead>
 <tbody>{profile_rows}</tbody>
 </table></div>
 <h2>Task matrix</h2>

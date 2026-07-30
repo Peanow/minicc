@@ -186,8 +186,10 @@ corecoder compare benchmarks/results/run-a benchmarks/results/run-b \
   -o .tmp/comparison.html
 ```
 
-报告按模型/策略汇总成功率、token、墙钟时间、可选成本、策略拒绝和校验器完整性，
-并生成逐任务结果矩阵。
+报告按模型/策略汇总成功率、token、墙钟时间、可选成本、策略拒绝、校验器完整性、
+隐藏验证通过率、编辑精度、无关文件修改率、失败恢复率和上下文压缩次数，并生成逐
+任务结果矩阵。Tier 1 默认对 `hybrid`、`truncate`、`summary` 在相同上下文预算下
+各重复运行三次。
 
 提交评测证据前，先审计原始 Trace 并只导出可移植指标与哈希：
 

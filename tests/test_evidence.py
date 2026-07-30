@@ -64,6 +64,17 @@ def _build_evaluation(tmp_path):
         "stdout_path": str(stdout_path.relative_to(evaluation)),
         "stderr_path": str(stderr_path.relative_to(evaluation)),
         "error": None,
+        "repetition": 1,
+        "hidden_checks_passed": 1,
+        "hidden_checks_total": 1,
+        "workspace_changed_files": ["app.py"],
+        "expected_change_paths": ["app.py"],
+        "unrelated_changed_files": [],
+        "edit_precision": 1.0,
+        "unrelated_file_modification_rate": 0.0,
+        "tool_failures": 0,
+        "failure_recovered": None,
+        "context_compactions": 0,
     }
     (evaluation / "results.jsonl").write_text(json.dumps(record) + "\n")
     (evaluation / "summary.json").write_text(json.dumps({
@@ -77,6 +88,15 @@ def _build_evaluation(tmp_path):
         "estimated_cost_usd": None,
         "policy_denials": 0,
         "policy_denials_by_risk": {},
+        "hidden_checks_passed": 1,
+        "hidden_checks_total": 1,
+        "hidden_pass_rate": 1.0,
+        "mean_edit_precision": 1.0,
+        "mean_unrelated_file_modification_rate": 0.0,
+        "runs_with_tool_failures": 0,
+        "recovered_runs": 0,
+        "failure_recovery_rate": None,
+        "context_compactions": 0,
         "by_model": {},
         "by_strategy": {},
     }))

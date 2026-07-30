@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -16,6 +17,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .replay import load_trace, replay_trace
+from .trace import JsonlTraceSink
 
 
 SCHEMA_VERSION = 1
@@ -39,6 +41,7 @@ class StrategyProfile:
     context_strategy: str = "hybrid"
     permission_mode: str = "workspace-write"
     tokenizer: str = "auto"
+    max_context_tokens: int = 128_000
     enabled: bool = True
 
 
@@ -49,12 +52,29 @@ class CheckSpec:
 
 
 @dataclass(frozen=True)
+class HiddenCheckSpec:
+    path: Path
+    timeout_seconds: int = 30
+
+
+@dataclass(frozen=True)
+class TaskProvenance:
+    repository: str
+    commit: str
+    license: str
+    issue: str | None = None
+
+
+@dataclass(frozen=True)
 class TaskSpec:
     id: str
     fixture: Path
     prompt: str
     checks: tuple[CheckSpec, ...]
+    hidden_checks: tuple[HiddenCheckSpec, ...]
     protected_paths: tuple[Path, ...]
+    expected_change_paths: tuple[Path, ...]
+    provenance: TaskProvenance | None = None
     tags: tuple[str, ...] = ()
     timeout_seconds: int = 300
 
@@ -66,6 +86,8 @@ class EvalManifest:
     models: tuple[ModelProfile, ...]
     strategies: tuple[StrategyProfile, ...]
     tasks: tuple[TaskSpec, ...]
+    repetitions: int = 1
+    tier: str = "tier1"
     schema_version: int = SCHEMA_VERSION
 
 
@@ -74,10 +96,15 @@ class EvalCase:
     task: TaskSpec
     model: ModelProfile
     strategy: StrategyProfile
+    repetition: int = 1
+    repetition_count: int = 1
 
     @property
     def id(self) -> str:
-        return f"{self.task.id}__{self.model.id}__{self.strategy.id}"
+        base = f"{self.task.id}__{self.model.id}__{self.strategy.id}"
+        if self.repetition_count == 1:
+            return base
+        return f"{base}__r{self.repetition:02d}"
 
 
 @dataclass
@@ -108,6 +135,19 @@ class EvalRecord:
     stdout_path: str
     stderr_path: str
     error: str | None = None
+    repetition: int = 1
+    hidden_checks_passed: int = 0
+    hidden_checks_total: int = 0
+    workspace_changed_files: list[str] = field(default_factory=list)
+    expected_change_paths: list[str] = field(default_factory=list)
+    unrelated_changed_files: list[str] = field(default_factory=list)
+    edit_precision: float = 0.0
+    unrelated_file_modification_rate: float = 0.0
+    tool_failures: int = 0
+    failure_recovered: bool | None = None
+    context_compactions: int = 0
+    max_context_tokens: int = 128_000
+    task_provenance: dict[str, str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -125,6 +165,15 @@ class EvalSummary:
     estimated_cost_usd: float | None
     policy_denials: int
     policy_denials_by_risk: dict[str, int]
+    hidden_checks_passed: int
+    hidden_checks_total: int
+    hidden_pass_rate: float | None
+    mean_edit_precision: float
+    mean_unrelated_file_modification_rate: float
+    runs_with_tool_failures: int
+    recovered_runs: int
+    failure_recovery_rate: float | None
+    context_compactions: int
     by_model: dict[str, dict[str, Any]] = field(default_factory=dict)
     by_strategy: dict[str, dict[str, Any]] = field(default_factory=dict)
 
@@ -249,6 +298,131 @@ def _resolve_protected_paths(
     return tuple(paths)
 
 
+def _resolve_expected_change_paths(
+    fixture: Path,
+    values: Any,
+    task_id: str,
+) -> tuple[Path, ...]:
+    if values is None:
+        return ()
+    if not isinstance(values, list):
+        raise ValueError(f"task {task_id}.expected_change_paths must be an array")
+    paths: list[Path] = []
+    for index, value in enumerate(values):
+        relative = Path(
+            _require_string(
+                value,
+                f"task {task_id}.expected_change_paths[{index}]",
+            )
+        )
+        if relative.is_absolute():
+            raise ValueError(
+                f"task {task_id}.expected_change_paths[{index}] must be relative"
+            )
+        resolved = (fixture / relative).resolve()
+        try:
+            resolved.relative_to(fixture)
+        except ValueError as exc:
+            raise ValueError(
+                f"task {task_id}.expected_change_paths[{index}] escapes the fixture"
+            ) from exc
+        paths.append(relative)
+    return tuple(paths)
+
+
+def _resolve_hidden_checks(
+    manifest_dir: Path,
+    values: Any,
+    task_id: str,
+) -> tuple[HiddenCheckSpec, ...]:
+    if values is None:
+        return ()
+    if not isinstance(values, list):
+        raise ValueError(f"task {task_id}.hidden_checks must be an array")
+    checks: list[HiddenCheckSpec] = []
+    for index, value in enumerate(values):
+        item = _require_mapping(
+            value,
+            f"task {task_id}.hidden_checks[{index}]",
+        )
+        relative = Path(
+            _require_string(
+                item.get("path"),
+                f"task {task_id}.hidden_checks[{index}].path",
+            )
+        )
+        if relative.is_absolute():
+            raise ValueError(
+                f"task {task_id}.hidden_checks[{index}].path must be relative"
+            )
+        resolved = (manifest_dir / relative).resolve()
+        try:
+            resolved.relative_to(manifest_dir)
+        except ValueError as exc:
+            raise ValueError(
+                f"task {task_id}.hidden_checks[{index}].path escapes "
+                "the manifest directory"
+            ) from exc
+        if not resolved.is_file():
+            raise ValueError(
+                f"task {task_id}.hidden_checks[{index}].path is not a file: "
+                f"{relative}"
+            )
+        checks.append(HiddenCheckSpec(
+            path=resolved,
+            timeout_seconds=_positive_int(
+                item.get("timeout_seconds", 30),
+                f"task {task_id}.hidden_checks[{index}].timeout_seconds",
+            ),
+        ))
+    return tuple(checks)
+
+
+def _parse_provenance(
+    value: Any,
+    task_id: str,
+    *,
+    required: bool,
+) -> TaskProvenance | None:
+    if value is None:
+        if required:
+            raise ValueError(f"Tier 2 task {task_id} must define provenance")
+        return None
+    item = _require_mapping(value, f"task {task_id}.provenance")
+    repository = _require_string(
+        item.get("repository"),
+        f"task {task_id}.provenance.repository",
+    )
+    commit = _require_string(
+        item.get("commit"),
+        f"task {task_id}.provenance.commit",
+    )
+    license_name = _require_string(
+        item.get("license"),
+        f"task {task_id}.provenance.license",
+    )
+    issue = _optional_string(
+        item.get("issue"),
+        f"task {task_id}.provenance.issue",
+    )
+    if not repository.startswith("https://"):
+        raise ValueError(
+            f"task {task_id}.provenance.repository must use https://"
+        )
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", commit):
+        raise ValueError(
+            f"task {task_id}.provenance.commit must be a full 40-character SHA"
+        )
+    if issue and not issue.startswith("https://"):
+        raise ValueError(f"task {task_id}.provenance.issue must use https://")
+    return TaskProvenance(
+        repository=repository,
+        commit=commit.lower(),
+        license=license_name,
+        issue=issue,
+    )
+
+
 def load_manifest(path: str | Path) -> EvalManifest:
     """Load and validate a versioned JSON benchmark manifest."""
     source = Path(path).expanduser().resolve()
@@ -263,6 +437,7 @@ def load_manifest(path: str | Path) -> EvalManifest:
             f"unsupported manifest schema_version {version!r}; "
             f"expected {SCHEMA_VERSION}"
         )
+    tier = _require_string(root.get("tier", "tier1"), "manifest.tier")
 
     models = _unique(
         (
@@ -321,6 +496,10 @@ def load_manifest(path: str | Path) -> EvalManifest:
                     {"auto", "approx", "tiktoken"},
                     f"strategies[{index}].tokenizer",
                 ),
+                max_context_tokens=_positive_int(
+                    item.get("max_context_tokens", 128_000),
+                    f"strategies[{index}].max_context_tokens",
+                ),
                 enabled=_optional_bool(
                     item.get("enabled"),
                     f"strategies[{index}].enabled",
@@ -370,10 +549,25 @@ def load_manifest(path: str | Path) -> EvalManifest:
                 fixture=fixture,
                 prompt=_require_string(item.get("prompt"), f"task {task_id}.prompt"),
                 checks=tuple(checks),
+                hidden_checks=_resolve_hidden_checks(
+                    source.parent,
+                    item.get("hidden_checks"),
+                    task_id,
+                ),
                 protected_paths=_resolve_protected_paths(
                     fixture,
                     item.get("protected_paths"),
                     task_id,
+                ),
+                expected_change_paths=_resolve_expected_change_paths(
+                    fixture,
+                    item.get("expected_change_paths"),
+                    task_id,
+                ),
+                provenance=_parse_provenance(
+                    item.get("provenance"),
+                    task_id,
+                    required=tier == "tier2",
                 ),
                 tags=tuple(
                     _require_string(tag, f"task {task_id}.tags")
@@ -392,6 +586,11 @@ def load_manifest(path: str | Path) -> EvalManifest:
         models=models,
         strategies=strategies,
         tasks=_unique(tasks, "task"),
+        repetitions=_positive_int(
+            root.get("repetitions", 1),
+            "manifest.repetitions",
+        ),
+        tier=tier,
         schema_version=version,
     )
 
@@ -402,19 +601,31 @@ def plan_cases(
     task_ids: set[str] | None = None,
     model_ids: set[str] | None = None,
     strategy_ids: set[str] | None = None,
+    repetitions: int | None = None,
     limit: int | None = None,
 ) -> list[EvalCase]:
     """Expand enabled manifest profiles into a stable cartesian-product plan."""
     if limit is not None and limit < 0:
         raise ValueError("limit must be non-negative")
+    repeat_count = manifest.repetitions if repetitions is None else _positive_int(
+        repetitions,
+        "repetitions",
+    )
     cases = [
-        EvalCase(task=task, model=model, strategy=strategy)
+        EvalCase(
+            task=task,
+            model=model,
+            strategy=strategy,
+            repetition=repetition,
+            repetition_count=repeat_count,
+        )
         for task in manifest.tasks
         if not task_ids or task.id in task_ids
         for model in manifest.models
         if model.enabled and (not model_ids or model.id in model_ids)
         for strategy in manifest.strategies
         if strategy.enabled and (not strategy_ids or strategy.id in strategy_ids)
+        for repetition in range(1, repeat_count + 1)
     ]
     if task_ids:
         missing = task_ids - {case.task.id for case in cases}
@@ -510,6 +721,65 @@ def _tree_digest(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _tree_file_digests(path: Path) -> dict[str, str]:
+    return {
+        str(entry.relative_to(path)): _file_digest(entry)
+        for entry in sorted(path.rglob("*"))
+        if entry.is_file()
+        and "__pycache__" not in entry.parts
+        and entry.suffix != ".pyc"
+        and entry.name != ".DS_Store"
+    }
+
+
+def _changed_tree_files(
+    before: dict[str, str],
+    after: dict[str, str],
+) -> list[str]:
+    return sorted(
+        path
+        for path in before.keys() | after.keys()
+        if before.get(path) != after.get(path)
+    )
+
+
+def _tool_failures(events: list[dict]) -> int:
+    failures = 0
+    for event in events:
+        if event.get("event") != "tool_result":
+            continue
+        content = str((event.get("data") or {}).get("content") or "").lstrip()
+        if content.startswith(("Error", "Blocked")):
+            failures += 1
+    return failures
+
+
+def _edit_metrics(
+    changed_files: list[str],
+    expected_paths: tuple[Path, ...],
+) -> tuple[list[str], float, float]:
+    expected = {str(path) for path in expected_paths}
+    actual = set(changed_files)
+    unrelated = sorted(actual - expected)
+    if not actual:
+        precision = 1.0 if not expected else 0.0
+        unrelated_rate = 0.0
+    else:
+        precision = round(len(actual & expected) / len(actual), 4)
+        unrelated_rate = round(len(unrelated) / len(actual), 4)
+    return unrelated, precision, unrelated_rate
+
+
+def _task_provenance(task: TaskSpec) -> dict[str, str] | None:
+    if task.provenance is None:
+        return None
+    return {
+        key: value
+        for key, value in asdict(task.provenance).items()
+        if value is not None
+    }
+
+
 def _run_command(
     argv: list[str],
     *,
@@ -580,6 +850,13 @@ def run_case(case: EvalCase, output_dir: Path) -> EvalRecord:
             stdout_path=str(stdout_path.relative_to(output_dir)),
             stderr_path=str(stderr_path.relative_to(output_dir)),
             error=f"missing API key environment variable: {case.model.api_key_env}",
+            repetition=case.repetition,
+            hidden_checks_total=len(case.task.hidden_checks),
+            expected_change_paths=[
+                str(path) for path in case.task.expected_change_paths
+            ],
+            max_context_tokens=case.strategy.max_context_tokens,
+            task_provenance=_task_provenance(case.task),
         )
 
     with tempfile.TemporaryDirectory(prefix=f"corecoder-eval-{_slug(case.task.id)}-") as tmp:
@@ -590,6 +867,7 @@ def run_case(case: EvalCase, output_dir: Path) -> EvalRecord:
             symlinks=True,
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"),
         )
+        workspace_before = _tree_file_digests(workspace)
         protected_digests = {
             relative: _file_digest(workspace / relative)
             for relative in case.task.protected_paths
@@ -618,6 +896,7 @@ def run_case(case: EvalCase, output_dir: Path) -> EvalRecord:
         env["CORECODER_EMBEDDING_PROVIDER"] = "none"
         env["CORECODER_MEMORY_DB"] = str(case_dir / "memory.db")
         env["CORECODER_SANITIZE_TOOL_ENV"] = "1"
+        env["CORECODER_MAX_CONTEXT"] = str(case.strategy.max_context_tokens)
         source_root = str(Path(__file__).resolve().parents[1])
         existing_pythonpath = env.get("PYTHONPATH")
         env["PYTHONPATH"] = (
@@ -656,6 +935,7 @@ def run_case(case: EvalCase, output_dir: Path) -> EvalRecord:
                         timeout=check.timeout_seconds,
                     )
                     checks.append({
+                        "visibility": "public",
                         "argv": list(check.argv),
                         "exit_code": result.returncode,
                         "passed": result.returncode == 0,
@@ -668,6 +948,7 @@ def run_case(case: EvalCase, output_dir: Path) -> EvalRecord:
                     })
                 except subprocess.TimeoutExpired:
                     checks.append({
+                        "visibility": "public",
                         "argv": list(check.argv),
                         "exit_code": None,
                         "passed": False,
@@ -678,8 +959,42 @@ def run_case(case: EvalCase, output_dir: Path) -> EvalRecord:
                         "stdout": "",
                         "stderr": f"check timed out after {check.timeout_seconds}s",
                     })
+            for index, check in enumerate(case.task.hidden_checks, start=1):
+                check_started = time.perf_counter()
+                try:
+                    result = _run_command(
+                        [sys.executable, str(check.path)],
+                        cwd=workspace,
+                        env=_sanitized_environment(),
+                        timeout=check.timeout_seconds,
+                    )
+                    checks.append({
+                        "visibility": "hidden",
+                        "id": f"hidden-{index}",
+                        "exit_code": result.returncode,
+                        "passed": result.returncode == 0,
+                        "duration_ms": round(
+                            (time.perf_counter() - check_started) * 1000,
+                            2,
+                        ),
+                    })
+                except subprocess.TimeoutExpired:
+                    checks.append({
+                        "visibility": "hidden",
+                        "id": f"hidden-{index}",
+                        "exit_code": None,
+                        "passed": False,
+                        "duration_ms": round(
+                            (time.perf_counter() - check_started) * 1000,
+                            2,
+                        ),
+                    })
 
         wall_duration_ms = round((time.perf_counter() - started) * 1000, 2)
+        workspace_changed_files = _changed_tree_files(
+            workspace_before,
+            _tree_file_digests(workspace),
+        )
         protected_files_unchanged = all(
             (workspace / relative).is_file()
             and _file_digest(workspace / relative) == digest
@@ -710,6 +1025,36 @@ def run_case(case: EvalCase, output_dir: Path) -> EvalRecord:
         and checks
         and all(check["passed"] for check in checks)
     )
+    hidden_checks = [
+        check for check in checks if check.get("visibility") == "hidden"
+    ]
+    unrelated_files, edit_precision, unrelated_rate = _edit_metrics(
+        workspace_changed_files,
+        case.task.expected_change_paths,
+    )
+    tool_failures = _tool_failures(events)
+    context_compactions = sum(
+        event.get("event") == "context_compacted" for event in events
+    )
+    failure_recovered = success if tool_failures else None
+    if replay:
+        evaluator_trace = JsonlTraceSink(trace_path, run_id=replay.run_id)
+        evaluator_trace.emit(
+            "evaluation_measured",
+            repetition=case.repetition,
+            hidden_checks_passed=sum(check["passed"] for check in hidden_checks),
+            hidden_checks_total=len(case.task.hidden_checks),
+            workspace_changed_files=workspace_changed_files,
+            unrelated_changed_files=unrelated_files,
+            edit_precision=edit_precision,
+            unrelated_file_modification_rate=unrelated_rate,
+            tool_failures=tool_failures,
+            failure_recovered=failure_recovered,
+            context_compactions=context_compactions,
+            max_context_tokens=case.strategy.max_context_tokens,
+            task_provenance=_task_provenance(case.task),
+        )
+        evaluator_trace.close()
     return EvalRecord(
         case_id=case.id,
         task_id=case.task.id,
@@ -737,6 +1082,21 @@ def run_case(case: EvalCase, output_dir: Path) -> EvalRecord:
         stdout_path=str(stdout_path.relative_to(output_dir)),
         stderr_path=str(stderr_path.relative_to(output_dir)),
         error=error,
+        repetition=case.repetition,
+        hidden_checks_passed=sum(check["passed"] for check in hidden_checks),
+        hidden_checks_total=len(case.task.hidden_checks),
+        workspace_changed_files=workspace_changed_files,
+        expected_change_paths=[
+            str(path) for path in case.task.expected_change_paths
+        ],
+        unrelated_changed_files=unrelated_files,
+        edit_precision=edit_precision,
+        unrelated_file_modification_rate=unrelated_rate,
+        tool_failures=tool_failures,
+        failure_recovered=failure_recovered,
+        context_compactions=context_compactions,
+        max_context_tokens=case.strategy.max_context_tokens,
+        task_provenance=_task_provenance(case.task),
     )
 
 
@@ -761,8 +1121,65 @@ def _group_metrics(records: list[EvalRecord], field_name: str) -> dict[str, dict
                 2,
             ),
             "policy_denials_by_risk": _merge_risk_counts(group),
+            **_quality_metrics(group),
         }
         for key, group in sorted(groups.items())
+    }
+
+
+def _quality_metrics(records: list[EvalRecord]) -> dict[str, Any]:
+    hidden_total = sum(record.hidden_checks_total for record in records)
+    runs_with_failures = [
+        record for record in records if record.tool_failures > 0
+    ]
+    return {
+        "hidden_checks_passed": sum(
+            record.hidden_checks_passed for record in records
+        ),
+        "hidden_checks_total": hidden_total,
+        "hidden_pass_rate": (
+            round(
+                sum(record.hidden_checks_passed for record in records)
+                / hidden_total,
+                4,
+            )
+            if hidden_total
+            else None
+        ),
+        "mean_edit_precision": (
+            round(sum(record.edit_precision for record in records) / len(records), 4)
+            if records
+            else 0.0
+        ),
+        "mean_unrelated_file_modification_rate": (
+            round(
+                sum(
+                    record.unrelated_file_modification_rate
+                    for record in records
+                ) / len(records),
+                4,
+            )
+            if records
+            else 0.0
+        ),
+        "runs_with_tool_failures": len(runs_with_failures),
+        "recovered_runs": sum(
+            record.failure_recovered is True for record in runs_with_failures
+        ),
+        "failure_recovery_rate": (
+            round(
+                sum(
+                    record.failure_recovered is True
+                    for record in runs_with_failures
+                ) / len(runs_with_failures),
+                4,
+            )
+            if runs_with_failures
+            else None
+        ),
+        "context_compactions": sum(
+            record.context_compactions for record in records
+        ),
     }
 
 
@@ -772,6 +1189,7 @@ def aggregate_records(records: Iterable[EvalRecord]) -> EvalSummary:
     all_costs_known = bool(records) and all(
         record.estimated_cost_usd is not None for record in records
     )
+    quality = _quality_metrics(records)
     return EvalSummary(
         total_cases=len(records),
         successful_cases=successful,
@@ -787,6 +1205,17 @@ def aggregate_records(records: Iterable[EvalRecord]) -> EvalSummary:
         ),
         policy_denials=sum(record.policy_denials for record in records),
         policy_denials_by_risk=_merge_risk_counts(records),
+        hidden_checks_passed=quality["hidden_checks_passed"],
+        hidden_checks_total=quality["hidden_checks_total"],
+        hidden_pass_rate=quality["hidden_pass_rate"],
+        mean_edit_precision=quality["mean_edit_precision"],
+        mean_unrelated_file_modification_rate=quality[
+            "mean_unrelated_file_modification_rate"
+        ],
+        runs_with_tool_failures=quality["runs_with_tool_failures"],
+        recovered_runs=quality["recovered_runs"],
+        failure_recovery_rate=quality["failure_recovery_rate"],
+        context_compactions=quality["context_compactions"],
         by_model=_group_metrics(records, "model_profile"),
         by_strategy=_group_metrics(records, "strategy_profile"),
     )
@@ -817,9 +1246,28 @@ def run_evaluation(
     metadata = {
         "schema_version": SCHEMA_VERSION,
         "manifest": manifest.name,
+        "tier": manifest.tier,
+        "repetitions": (
+            cases[0].repetition_count if cases else manifest.repetitions
+        ),
         "manifest_sha256": _file_digest(manifest.source_path),
         "fixture_digests": {
             task.id: _tree_digest(task.fixture) for task in manifest.tasks
+        },
+        "task_provenance": {
+            task.id: _task_provenance(task)
+            for task in manifest.tasks
+            if task.provenance is not None
+        },
+        "hidden_check_digests": {
+            task.id: {
+                str(check.path.relative_to(manifest.source_path.parent)): _file_digest(
+                    check.path
+                )
+                for check in task.hidden_checks
+            }
+            for task in manifest.tasks
+            if task.hidden_checks
         },
         "harness_digest": _tree_digest(Path(__file__).resolve().parent),
         "python": sys.version,

@@ -48,6 +48,13 @@ def test_comparison_aggregates_profiles_and_tasks(tmp_path):
             False,
             policy_denials=2,
             policy_denials_by_risk={"network": 2},
+            hidden_checks_passed=0,
+            hidden_checks_total=1,
+            edit_precision=0.5,
+            unrelated_file_modification_rate=0.5,
+            tool_failures=1,
+            failure_recovered=False,
+            context_compactions=2,
         ),
     ])
     _write_results(second, [
@@ -64,6 +71,10 @@ def test_comparison_aggregates_profiles_and_tasks(tmp_path):
     assert summary.profiles[0].policy_denials == 2
     assert summary.profiles[0].policy_denials_by_risk == {"network": 2}
     assert summary.profiles[0].estimated_cost_usd is None
+    assert summary.profiles[0].hidden_pass_rate == 0.0
+    assert summary.profiles[0].mean_edit_precision == 0.5
+    assert summary.profiles[0].failure_recovery_rate == 0.0
+    assert summary.profiles[0].context_compactions == 2
 
 
 def test_comparison_report_is_self_contained_and_escapes_labels(tmp_path):
@@ -84,6 +95,8 @@ def test_comparison_report_is_self_contained_and_escapes_labels(tmp_path):
     assert "task&lt;script&gt;" in document
     assert 'class="pass">pass' in document
     assert 'class="fail">fail' in document
+    assert "Edit precision" in document
+    assert "Failure recovery" in document
 
 
 def test_comparison_cli(tmp_path, monkeypatch, capsys):

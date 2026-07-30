@@ -128,6 +128,13 @@ Runtime Replay 会执行录制的文件工具，因此必须提供原始未解�
 corecoder eval benchmarks/local-v1.json --dry-run
 ```
 
+默认计划会对 18 个 Tier 1 任务、3 种上下文策略各重复 3 次，共 162 个 case。
+只验证配置或做低成本 smoke 时可显式覆盖：
+
+```bash
+corecoder eval benchmarks/local-v1.json --dry-run --repeat 1
+```
+
 再按任务和策略小范围运行，避免无意中发起整套付费调用：
 
 ```bash
@@ -153,6 +160,9 @@ corecoder compare benchmarks/results/run-a benchmarks/results/run-b \
 corecoder evidence .tmp/local-v1-run \
   -o benchmarks/results/local-v1-reviewed
 ```
+
+结果会同时记录隐藏验证、文件系统实际修改、编辑精度、无关文件修改率、工具失败
+恢复率和上下文压缩次数；分层评测口径见 `benchmarks/TIERS.md`。
 
 ## Workspace 验证目录
 

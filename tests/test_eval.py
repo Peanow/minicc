@@ -59,11 +59,14 @@ def test_bundled_manifest_expands_enabled_matrix():
     cases = plan_cases(manifest)
 
     assert manifest.name == "local-v1"
+    assert manifest.tier == "tier1"
+    assert manifest.repetitions == 3
     assert len(manifest.tasks) == 18
-    assert len(cases) == 36
+    assert len(cases) == 162
     assert cases[0].id == (
-        "python-inclusive-range__deepseek-v4-flash__hybrid-workspace"
+        "python-inclusive-range__deepseek-v4-flash__hybrid-workspace__r01"
     )
+    assert cases[2].repetition == 3
 
 
 def test_plan_filters_and_rejects_unknown_ids():
@@ -72,6 +75,7 @@ def test_plan_filters_and_rejects_unknown_ids():
         manifest,
         task_ids={"python-safe-path"},
         strategy_ids={"hybrid-workspace"},
+        repetitions=1,
     )
     assert len(cases) == 1
     assert cases[0].task.id == "python-safe-path"
@@ -102,6 +106,43 @@ def test_manifest_rejects_fixture_escape(tmp_path):
 
     with pytest.raises(ValueError, match="escapes"):
         load_manifest(path)
+
+
+def test_tier2_manifest_requires_pinned_repository_provenance(tmp_path):
+    fixture = tmp_path / "fixture"
+    fixture.mkdir()
+    (fixture / "verify.py").write_text("raise SystemExit(1)\n")
+    manifest = {
+        "schema_version": 1,
+        "name": "tier2-test",
+        "tier": "tier2",
+        "models": [{"id": "m", "model": "m", "api_key_env": "KEY"}],
+        "strategies": [{"id": "s"}],
+        "tasks": [{
+            "id": "t",
+            "fixture": "fixture",
+            "prompt": "work",
+            "checks": [{"argv": ["python", "verify.py"]}],
+            "protected_paths": ["verify.py"],
+            "expected_change_paths": ["app.py"],
+        }],
+    }
+    path = tmp_path / "tier2.json"
+    path.write_text(json.dumps(manifest))
+
+    with pytest.raises(ValueError, match="must define provenance"):
+        load_manifest(path)
+
+    manifest["tasks"][0]["provenance"] = {
+        "repository": "https://github.com/example/project",
+        "commit": "a" * 40,
+        "license": "MIT",
+        "issue": "https://github.com/example/project/issues/1",
+    }
+    path.write_text(json.dumps(manifest))
+
+    loaded = load_manifest(path)
+    assert loaded.tasks[0].provenance.commit == "a" * 40
 
 
 def test_aggregate_records_does_not_report_partial_cost():
@@ -135,6 +176,38 @@ def test_aggregate_records_does_not_report_partial_cost():
     assert summary.by_model["model"]["cases"] == 2
 
 
+def test_aggregate_records_reports_quality_and_recovery_metrics():
+    records = [
+        _record(
+            hidden_checks_passed=2,
+            hidden_checks_total=2,
+            edit_precision=1.0,
+            unrelated_file_modification_rate=0.0,
+            tool_failures=1,
+            failure_recovered=True,
+            context_compactions=2,
+        ),
+        _record(
+            case_id="task__model__strategy__r02",
+            hidden_checks_passed=1,
+            hidden_checks_total=2,
+            edit_precision=0.5,
+            unrelated_file_modification_rate=0.5,
+            tool_failures=1,
+            failure_recovered=False,
+            context_compactions=1,
+        ),
+    ]
+
+    summary = aggregate_records(records)
+
+    assert summary.hidden_pass_rate == 0.75
+    assert summary.mean_edit_precision == 0.75
+    assert summary.mean_unrelated_file_modification_rate == 0.25
+    assert summary.failure_recovery_rate == 0.5
+    assert summary.context_compactions == 3
+
+
 def test_run_case_missing_key_does_not_start_agent(tmp_path, monkeypatch):
     manifest = load_manifest(MANIFEST_PATH)
     case = plan_cases(manifest, limit=1)[0]
@@ -151,6 +224,7 @@ def test_run_case_missing_key_does_not_start_agent(tmp_path, monkeypatch):
 
 def test_run_case_rejects_modified_verifier(tmp_path, monkeypatch):
     import corecoder.eval as eval_module
+    from corecoder.replay import load_trace
     from corecoder.trace import JsonlTraceSink
 
     manifest = load_manifest(MANIFEST_PATH)
@@ -178,7 +252,15 @@ def test_run_case_rejects_modified_verifier(tmp_path, monkeypatch):
     assert not record.success
     assert not record.protected_files_unchanged
     assert record.changed_files == ["verify.py"]
+    assert record.workspace_changed_files == ["verify.py"]
+    assert record.unrelated_file_modification_rate == 1.0
+    assert record.hidden_checks_total == 1
+    assert seen_environments[0]["CORECODER_MAX_CONTEXT"] == "12000"
     assert "CORECODER_API_KEY" not in seen_environments[-1]
+    events = load_trace(tmp_path / record.trace_path)
+    measured = events[-1]
+    assert measured["event"] == "evaluation_measured"
+    assert measured["data"]["unrelated_file_modification_rate"] == 1.0
 
 
 def test_eval_cli_dry_run_needs_no_api_key(monkeypatch, capsys):
@@ -186,12 +268,23 @@ def test_eval_cli_dry_run_needs_no_api_key(monkeypatch, capsys):
 
     monkeypatch.setattr(
         "sys.argv",
-        ["corecoder", "eval", str(MANIFEST_PATH), "--dry-run", "--limit", "2"],
+        [
+            "corecoder",
+            "eval",
+            str(MANIFEST_PATH),
+            "--dry-run",
+            "--repeat",
+            "1",
+            "--limit",
+            "2",
+        ],
     )
     main()
 
     payload = json.loads(capsys.readouterr().out)
     assert payload["manifest"] == "local-v1"
+    assert payload["tier"] == "tier1"
+    assert payload["repetitions"] == 1
     assert payload["case_count"] == 2
 
 
@@ -208,8 +301,15 @@ def test_run_evaluation_writes_reproducibility_metadata(tmp_path, monkeypatch):
 
     assert summary.successful_cases == 1
     assert metadata["status"] == "completed"
+    assert metadata["tier"] == "tier1"
+    assert metadata["repetitions"] == 3
     assert len(metadata["manifest_sha256"]) == 64
     assert len(metadata["harness_digest"]) == 64
+    assert len(
+        metadata["hidden_check_digests"]["python-inclusive-range"][
+            "hidden/local-v1/python-inclusive-range.py"
+        ]
+    ) == 64
     assert "completed_at" in metadata
     assert (output / "results.jsonl").is_file()
     assert (output / "summary.json").is_file()
@@ -251,3 +351,24 @@ def test_benchmark_fixture_starts_unsolved(task):
         check=False,
     )
     assert result.returncode != 0, f"{task} unexpectedly starts solved"
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "python-inclusive-range",
+        "python-safe-path",
+        "python-retry-policy",
+    ],
+)
+def test_hidden_validator_rejects_unsolved_fixture(task):
+    fixture = REPO_ROOT / "benchmarks" / "tasks" / task
+    hidden = REPO_ROOT / "benchmarks" / "hidden" / "local-v1" / f"{task}.py"
+    result = subprocess.run(
+        [sys.executable, str(hidden)],
+        cwd=fixture,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0

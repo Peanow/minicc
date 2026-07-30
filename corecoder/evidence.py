@@ -175,6 +175,63 @@ def _validate_summary(summary: dict, records: list[dict]) -> None:
     for field, value in expected.items():
         if summary.get(field) != value:
             raise ValueError(f"summary/results mismatch: {field}")
+    hidden_total = sum(
+        int(record.get("hidden_checks_total") or 0) for record in records
+    )
+    runs_with_failures = [
+        record for record in records if int(record.get("tool_failures") or 0) > 0
+    ]
+    quality_expected = {
+        "hidden_checks_passed": sum(
+            int(record.get("hidden_checks_passed") or 0) for record in records
+        ),
+        "hidden_checks_total": hidden_total,
+        "hidden_pass_rate": (
+            round(
+                sum(
+                    int(record.get("hidden_checks_passed") or 0)
+                    for record in records
+                ) / hidden_total,
+                4,
+            )
+            if hidden_total
+            else None
+        ),
+        "mean_edit_precision": round(
+            sum(float(record.get("edit_precision") or 0) for record in records)
+            / len(records),
+            4,
+        ),
+        "mean_unrelated_file_modification_rate": round(
+            sum(
+                float(record.get("unrelated_file_modification_rate") or 0)
+                for record in records
+            ) / len(records),
+            4,
+        ),
+        "runs_with_tool_failures": len(runs_with_failures),
+        "recovered_runs": sum(
+            record.get("failure_recovered") is True
+            for record in runs_with_failures
+        ),
+        "failure_recovery_rate": (
+            round(
+                sum(
+                    record.get("failure_recovered") is True
+                    for record in runs_with_failures
+                ) / len(runs_with_failures),
+                4,
+            )
+            if runs_with_failures
+            else None
+        ),
+        "context_compactions": sum(
+            int(record.get("context_compactions") or 0) for record in records
+        ),
+    }
+    for field, value in quality_expected.items():
+        if field in summary and summary[field] != value:
+            raise ValueError(f"summary/results mismatch: {field}")
 
 
 def export_evidence(

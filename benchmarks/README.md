@@ -10,6 +10,10 @@ It is intentionally separate from the unit-test suite:
 - a **strategy profile** selects context, permission, and tokenizer behavior;
 - a **case** is one task × model × strategy combination.
 
+The benchmark is organized into Tier 1 fast regression, Tier 2 small real
+repositories, and Tier 3 external issue benchmarks. See
+[`TIERS.md`](TIERS.md) for the evidence standard and scope of each layer.
+
 ## Inspect the plan
 
 Dry runs validate every fixture and protected path without loading an API key:
@@ -20,9 +24,11 @@ corecoder eval benchmarks/local-v1.json --dry-run \
   --task python-safe-path --strategy hybrid-workspace
 ```
 
-`local-v1.json` contains eighteen deliberately unsolved local tasks and two
-enabled strategy profiles. The comparison model and summary strategy are
-disabled until their connection and cost settings are supplied explicitly.
+`local-v1.json` contains eighteen deliberately unsolved local tasks. Its
+default matrix repeats every task three times across `hybrid`, `truncate`, and
+`summary` under the same context budget. Use `--repeat 1` only for smoke
+checks. The comparison model stays disabled until its connection and cost
+settings are supplied explicitly.
 
 ## Run cases
 
@@ -103,6 +109,11 @@ The exporter:
 5. emits portable `results.jsonl`, `summary.json`, `manifest.json`,
    `evidence.json`, and `report.html`.
 
+Each record also includes evaluator-hidden check outcomes, filesystem-observed
+changes, edit precision, unrelated-file modification rate, tool-failure
+recovery, and context-compaction counts. An `evaluation_measured` Trace event
+records the same per-case measurements.
+
 Trace bodies, stdout/stderr contents, SQLite databases, and temporary
 workspaces remain in the ignored source directory and are never copied.
 
@@ -116,6 +127,10 @@ successfully.
 Checks are argument arrays, never shell strings. Fixture paths and protected
 paths must remain inside the manifest directory and task fixture respectively;
 external symlinks are rejected.
+
+`hidden_checks` point to evaluator scripts outside the copied workspace. This
+prevents ordinary prompt/workspace inspection from revealing assertions, but
+it is not an OS sandbox: full host-process isolation remains out of scope.
 
 ## Metric policy
 

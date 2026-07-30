@@ -84,6 +84,11 @@ def _parse_args():
     eval_parser.add_argument("--task", action="append", dest="eval_tasks")
     eval_parser.add_argument("--model-profile", action="append", dest="eval_models")
     eval_parser.add_argument("--strategy", action="append", dest="eval_strategies")
+    eval_parser.add_argument(
+        "--repeat",
+        type=int,
+        help="Override manifest repetitions for each task/model/strategy case",
+    )
     eval_parser.add_argument("--limit", type=int)
     eval_parser.add_argument(
         "--dry-run",
@@ -146,6 +151,7 @@ def main():
                 task_ids=set(args.eval_tasks or []),
                 model_ids=set(args.eval_models or []),
                 strategy_ids=set(args.eval_strategies or []),
+                repetitions=args.repeat,
                 limit=args.limit,
             )
         except (OSError, ValueError) as exc:
@@ -154,6 +160,12 @@ def main():
         if args.dry_run:
             payload = {
                 "manifest": manifest.name,
+                "tier": manifest.tier,
+                "repetitions": (
+                    cases[0].repetition_count
+                    if cases
+                    else args.repeat or manifest.repetitions
+                ),
                 "case_count": len(cases),
                 "cases": [case.id for case in cases],
             }
