@@ -1,0 +1,44 @@
+{
+  "excluded_artifacts": [
+    "trace contents",
+    "agent stdout/stderr contents",
+    "SQLite memory",
+    "temporary workspaces"
+  ],
+  "exported_at": "2026-07-30T15:36:58.268047+00:00",
+  "manifest_sanitized": true,
+  "schema_version": 1,
+  "source_hashes": {
+    "manifest": "82a207ddb2b18756b3d5c2ade9fc015d271313a7c6435ea5bba2a31fe723abce",
+    "results": "b6547ec2e3f67ed14827553d9c63082aca98cd0877348f8334c50501a8d3474a",
+    "run": "d2d20b52d8ac5ef7601681c680182e8dbef3f8d7a6597dfb3b1118cdcbaea67f",
+    "summary": "2747ec35de7aefc1e618d4daf5e421d777e0c637949baf23a4e128a3afe32f42"
+  },
+  "source_run": {
+    "cases": [
+      "python-inclusive-range__deepseek-v4-flash__hybrid-workspace"
+    ],
+    "completed_at": "2026-07-30T14:09:47.184637+00:00",
+    "fixture_digests": {
+      "python-cursor-pagination": "c0297c2639397ca42b05c2498038672452e748a9ddee3cda850f6eb17161b575",
+      "python-deep-merge": "91282a33b5aef9cae2c39184749dc143509a48ab5f835ec6425ee4414e70c880",
+      "python-inclusive-range": "e93ddd807cb49920637d2334507156dd9d8038e174d1781d6cd03e0122137e09",
+      "python-lazy-batches": "9e936134bed2c4a6c385a52eb86879da0b4444317fe550ebb800e2a310d60770",
+      "python-multifile-slug": "210cb819c3d332f2f5ef8580901f257bfabd15bb714d4bd7b4d264303e51fadb",
+      "python-record-normalizer": "69b6615b9e17861b27f698101b0d0c45be4426d9390e871cf099b3a57b3b56b8",
+      "python-retry-policy": "07730b416a88eb5494d139a36e4dff7f47f6fbe441a1c6437425373a441644d2",
+      "python-safe-path": "779e33fd65ec962021f6953d9de04d3623acb8b211b85432a2ddbd49cd836495",
+      "python-scoped-instructions": "259db06de3a1d5631b3178ea8f15a7e5f915db008dd57f850a549ff97fcc72d3",
+      "python-secret-redaction": "9d7f1be527a0caf9dc16a2f408d486ce703c1e4a6f22a157f39a360a596a60ea",
+      "python-topological-order": "f28f1b17e61090493f422db9e2e214fc0dee4a6a9da4f1e267b9075f2187d9db",
+      "python-ttl-cache": "6d24d80903dd1706e3c684df5a5a69fdad340445e6b68b8c66d9b1e60a086eb2"
+    },
+    "harness_digest": "4db267f9bbf087432d9da94fcf3dbcc799ad216fd592af384f2ac6b049619bf3",
+    "manifest": "local-v1",
+    "manifest_sha256": "82a207ddb2b18756b3d5c2ade9fc015d271313a7c6435ea5bba2a31fe723abce",
+    "python": "3.11.9 (main, Apr 15 2026, 11:23:34) [Clang 17.0.0 (clang-1700.6.3.2)]",
+    "schema_version": 1,
+    "started_at": "2026-07-30T14:09:35.542167+00:00",
+    "status": "completed"
+  }
+}

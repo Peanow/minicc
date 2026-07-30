@@ -1,0 +1,296 @@
+{
+  "models": [
+    {
+      "api_key_env": "OPENAI_API_KEY",
+      "base_url": "https://api.deepseek.com",
+      "enabled": true,
+      "id": "deepseek-v4-flash",
+      "model": "deepseek-v4-flash"
+    },
+    {
+      "api_key_env": "CORECODER_EVAL_COMPARISON_API_KEY",
+      "enabled": false,
+      "id": "comparison-model",
+      "model": "replace-with-an-openai-compatible-model-id"
+    }
+  ],
+  "name": "local-v1",
+  "schema_version": 1,
+  "strategies": [
+    {
+      "context_strategy": "hybrid",
+      "enabled": true,
+      "id": "hybrid-workspace",
+      "permission_mode": "workspace-write",
+      "tokenizer": "auto"
+    },
+    {
+      "context_strategy": "truncate",
+      "enabled": true,
+      "id": "truncate-workspace",
+      "permission_mode": "workspace-write",
+      "tokenizer": "auto"
+    },
+    {
+      "context_strategy": "summary",
+      "enabled": false,
+      "id": "summary-workspace",
+      "permission_mode": "workspace-write",
+      "tokenizer": "auto"
+    }
+  ],
+  "tasks": [
+    {
+      "checks": [
+        {
+          "argv": [
+            "python",
+            "verify.py"
+          ]
+        }
+      ],
+      "fixture": "tasks/python-inclusive-range",
+      "id": "python-inclusive-range",
+      "prompt": "Fix inclusive_sum in range_utils.py. It must include both endpoints and raise ValueError when start is greater than end. Keep the public function signature unchanged. Run the provided verifier before finishing.",
+      "protected_paths": [
+        "verify.py"
+      ],
+      "tags": [
+        "python",
+        "bugfix",
+        "boundary"
+      ]
+    },
+    {
+      "checks": [
+        {
+          "argv": [
+            "python",
+            "verify.py"
+          ]
+        }
+      ],
+      "fixture": "tasks/python-record-normalizer",
+      "id": "python-record-normalizer",
+      "prompt": "Complete normalize_records in normalizer.py. Ignore blank and comment lines, trim each comma-separated field, reject malformed rows with ValueError including the 1-based line number, and return dictionaries with name and role keys. Keep the implementation dependency-free and run verify.py.",
+      "protected_paths": [
+        "verify.py"
+      ],
+      "tags": [
+        "python",
+        "feature",
+        "parsing"
+      ]
+    },
+    {
+      "checks": [
+        {
+          "argv": [
+            "python",
+            "verify.py"
+          ]
+        }
+      ],
+      "fixture": "tasks/python-ttl-cache",
+      "id": "python-ttl-cache",
+      "prompt": "Implement expiration in TTLCache without changing its constructor or method signatures. Use the injected clock, refresh a key's deadline when set is called again, treat ttl_seconds=0 as immediately expired, and remove expired entries when read. Run verify.py.",
+      "protected_paths": [
+        "verify.py"
+      ],
+      "tags": [
+        "python",
+        "state",
+        "time"
+      ]
+    },
+    {
+      "checks": [
+        {
+          "argv": [
+            "python",
+            "verify.py"
+          ]
+        }
+      ],
+      "fixture": "tasks/python-safe-path",
+      "id": "python-safe-path",
+      "prompt": "Harden resolve_member in archive.py against archive path traversal. It must return the resolved destination for safe relative members and raise ValueError for absolute paths, parent traversal, or prefix-confusion escapes. Do not access the filesystem beyond path resolution. Run verify.py.",
+      "protected_paths": [
+        "verify.py"
+      ],
+      "tags": [
+        "python",
+        "security",
+        "paths"
+      ]
+    },
+    {
+      "checks": [
+        {
+          "argv": [
+            "python",
+            "verify.py"
+          ]
+        }
+      ],
+      "fixture": "tasks/python-multifile-slug",
+      "id": "python-multifile-slug",
+      "prompt": "Add a dependency-free slugify function in catalog/text.py and make build_entry in catalog/entries.py use it. Slugs must be lowercase ASCII, collapse runs of non-alphanumeric characters to one hyphen, and never start or end with a hyphen. Preserve build_entry's return shape and run verify.py.",
+      "protected_paths": [
+        "verify.py"
+      ],
+      "tags": [
+        "python",
+        "multi-file",
+        "feature"
+      ]
+    },
+    {
+      "checks": [
+        {
+          "argv": [
+            "python",
+            "verify.py"
+          ]
+        }
+      ],
+      "fixture": "tasks/python-scoped-instructions",
+      "id": "python-scoped-instructions",
+      "prompt": "Fix src/reporting.py so summarize returns the required aggregate for empty and non-empty inputs. Respect all project instructions, keep its public signature stable, and run verify.py.",
+      "protected_paths": [
+        "verify.py"
+      ],
+      "tags": [
+        "python",
+        "instructions",
+        "aggregation"
+      ]
+    },
+    {
+      "checks": [
+        {
+          "argv": [
+            "python",
+            "verify.py"
+          ]
+        }
+      ],
+      "fixture": "tasks/python-retry-policy",
+      "id": "python-retry-policy",
+      "prompt": "Implement run_with_retry in retry.py without changing its signature. Attempt at most max_attempts times, retry only exceptions accepted by should_retry, call sleeper between retries but never after the final attempt, and re-raise the original exception when stopping. Reject max_attempts below 1 with ValueError. Run verify.py.",
+      "protected_paths": [
+        "verify.py"
+      ],
+      "tags": [
+        "python",
+        "reliability",
+        "retry"
+      ]
+    },
+    {
+      "checks": [
+        {
+          "argv": [
+            "python",
+            "verify.py"
+          ]
+        }
+      ],
+      "fixture": "tasks/python-deep-merge",
+      "id": "python-deep-merge",
+      "prompt": "Implement deep_merge in merge.py. Recursively merge dictionaries, replace non-dictionary values including lists, preserve keys from both sides, and do not mutate either input. Keep the signature and use only the standard library. Run verify.py.",
+      "protected_paths": [
+        "verify.py"
+      ],
+      "tags": [
+        "python",
+        "configuration",
+        "immutability"
+      ]
+    },
+    {
+      "checks": [
+        {
+          "argv": [
+            "python",
+            "verify.py"
+          ]
+        }
+      ],
+      "fixture": "tasks/python-topological-order",
+      "id": "python-topological-order",
+      "prompt": "Implement dependency_order in graph.py. Return a deterministic topological order using lexical order when multiple nodes are ready, include dependencies that appear only in value lists, and raise ValueError containing 'cycle' for cyclic graphs. Do not mutate the input. Run verify.py.",
+      "protected_paths": [
+        "verify.py"
+      ],
+      "tags": [
+        "python",
+        "algorithm",
+        "dependencies"
+      ]
+    },
+    {
+      "checks": [
+        {
+          "argv": [
+            "python",
+            "verify.py"
+          ]
+        }
+      ],
+      "fixture": "tasks/python-secret-redaction",
+      "id": "python-secret-redaction",
+      "prompt": "Complete redact_secrets in redaction.py. Replace values in Bearer [REDACTED_TOKEN] tokens and api_key/token/password key-value pairs with [REDACTED], case-insensitively, while preserving surrounding text and avoiding changes to ordinary words. Do not add dependencies. Run verify.py.",
+      "protected_paths": [
+        "verify.py"
+      ],
+      "tags": [
+        "python",
+        "security",
+        "observability"
+      ]
+    },
+    {
+      "checks": [
+        {
+          "argv": [
+            "python",
+            "verify.py"
+          ]
+        }
+      ],
+      "fixture": "tasks/python-lazy-batches",
+      "id": "python-lazy-batches",
+      "prompt": "Implement iter_batches in batches.py as a lazy iterator over any iterable. Preserve order, emit a final partial batch, consume the source only as needed, and raise ValueError for size below 1. Keep the signature and run verify.py.",
+      "protected_paths": [
+        "verify.py"
+      ],
+      "tags": [
+        "python",
+        "iterators",
+        "data-processing"
+      ]
+    },
+    {
+      "checks": [
+        {
+          "argv": [
+            "python",
+            "verify.py"
+          ]
+        }
+      ],
+      "fixture": "tasks/python-cursor-pagination",
+      "id": "python-cursor-pagination",
+      "prompt": "Implement collect_pages in pagination.py. Call fetch_page(cursor) starting with None, concatenate items in order, stop when next_cursor is None, and raise ValueError containing 'cursor' if a cursor repeats. Keep the signature and run verify.py.",
+      "protected_paths": [
+        "verify.py"
+      ],
+      "tags": [
+        "python",
+        "api",
+        "pagination"
+      ]
+    }
+  ]
+}

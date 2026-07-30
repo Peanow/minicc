@@ -196,9 +196,9 @@ corecoder evidence .tmp/local-v1-run \
   -o benchmarks/results/local-v1-reviewed
 ```
 
-导出器会逐 case 对照 Trace 生命周期和结果指标、检查汇总、拒绝疑似凭证内容，并
-保留 SHA-256。Trace 正文、Agent 日志、SQLite Memory 和临时工作区不会进入证据
-目录，符合仓库的安全提交规则。
+导出器会逐 case 对照 Trace 生命周期和结果指标、检查汇总、拒绝结果中的疑似凭证、
+净化可提交的 manifest，并保留源文件 SHA-256。Trace 正文、Agent 日志、SQLite
+Memory 和临时工作区不会进入证据目录，符合仓库的安全提交规则。
 
 ## 架构
 

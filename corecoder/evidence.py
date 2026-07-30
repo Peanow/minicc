@@ -201,7 +201,7 @@ def export_evidence(
         raise ValueError("evaluation run is not complete")
     _assert_no_sensitive_value(run, "run metadata")
     _assert_no_sensitive_value(summary, "summary")
-    _assert_no_sensitive_value(manifest, "manifest snapshot")
+    portable_manifest = redact(manifest)
     _validate_summary(summary, records)
 
     portable_records = [_portable_record(source, record) for record in records]
@@ -219,7 +219,12 @@ def export_evidence(
         encoding="utf-8",
     )
     (output / "manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        json.dumps(
+            portable_manifest,
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ) + "\n",
         encoding="utf-8",
     )
     evidence = {
@@ -232,6 +237,7 @@ def export_evidence(
             "manifest": _sha256(manifest_path),
             "results": _sha256(results_path),
         },
+        "manifest_sanitized": portable_manifest != manifest,
         "excluded_artifacts": [
             "trace contents",
             "agent stdout/stderr contents",

@@ -118,7 +118,8 @@ corecoder evidence .tmp/local-v1-run \
 ```
 
 The exporter verifies trace lifecycles against every result, checks aggregate
-totals, rejects credential-like values, and retains SHA-256 hashes. Trace
+totals, rejects credentials in run results, sanitizes the portable manifest,
+and retains source SHA-256 hashes. Trace
 bodies, agent logs, SQLite memory, and temporary workspaces are deliberately
 excluded in accordance with the repository security rules.
 

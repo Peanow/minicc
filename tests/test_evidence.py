@@ -123,6 +123,27 @@ def test_export_evidence_rejects_sensitive_result(tmp_path):
         export_evidence(evaluation, tmp_path / "evidence")
 
 
+def test_export_evidence_sanitizes_manifest_and_keeps_source_hash(tmp_path):
+    evaluation = _build_evaluation(tmp_path)
+    path = evaluation / "manifest.snapshot.json"
+    manifest = json.loads(path.read_text())
+    manifest["tasks"] = [{
+        "id": "redaction-task",
+        "prompt": "Remove api_key=example-only-value from the fixture.",
+    }]
+    path.write_text(json.dumps(manifest))
+
+    output = tmp_path / "evidence"
+    export_evidence(evaluation, output)
+
+    portable = json.loads((output / "manifest.json").read_text())
+    metadata = json.loads((output / "evidence.json").read_text())
+    assert "example-only-value" not in json.dumps(portable)
+    assert "[REDACTED" in json.dumps(portable)
+    assert metadata["manifest_sanitized"] is True
+    assert len(metadata["source_hashes"]["manifest"]) == 64
+
+
 def test_export_evidence_rejects_tampered_summary(tmp_path):
     evaluation = _build_evaluation(tmp_path)
     path = evaluation / "summary.json"

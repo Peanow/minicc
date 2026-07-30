@@ -98,7 +98,7 @@ The exporter:
 1. validates run and summary consistency;
 2. replays every Trace lifecycle and cross-checks token, status, and changed
    file metrics;
-3. rejects credential-like or oversized values;
+3. rejects credential-like result data and sanitizes the portable manifest;
 4. replaces Trace/log paths with SHA-256 hashes and lifecycle metadata;
 5. emits portable `results.jsonl`, `summary.json`, `manifest.json`,
    `evidence.json`, and `report.html`.
