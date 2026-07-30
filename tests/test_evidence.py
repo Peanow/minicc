@@ -175,6 +175,42 @@ def test_export_evidence_rejects_tampered_summary(tmp_path):
         export_evidence(evaluation, tmp_path / "evidence")
 
 
+def test_export_evidence_preserves_consistent_incomplete_trace(tmp_path):
+    evaluation = _build_evaluation(tmp_path)
+    trace_path = evaluation / "cases" / "case-1" / "trace.jsonl"
+    events = [
+        json.loads(line)
+        for line in trace_path.read_text().splitlines()
+    ][:-1]
+    trace_path.write_text(
+        "".join(json.dumps(event) + "\n" for event in events)
+    )
+    results_path = evaluation / "results.jsonl"
+    record = json.loads(results_path.read_text())
+    record.update({
+        "success": False,
+        "agent_exit_code": 1,
+        "replay_valid": False,
+        "run_status": "incomplete",
+        "changed_files": [],
+    })
+    results_path.write_text(json.dumps(record) + "\n")
+    summary_path = evaluation / "summary.json"
+    summary = json.loads(summary_path.read_text())
+    summary.update({
+        "successful_cases": 0,
+        "success_rate": 0.0,
+    })
+    summary_path.write_text(json.dumps(summary))
+
+    output = tmp_path / "evidence"
+    export_evidence(evaluation, output)
+
+    exported = json.loads((output / "results.jsonl").read_text())
+    assert exported["replay_valid"] is False
+    assert exported["artifact_hashes"]["trace"]["valid"] is False
+
+
 def test_evidence_cli(tmp_path, monkeypatch, capsys):
     from corecoder.cli import main
 

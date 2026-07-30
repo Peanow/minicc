@@ -97,9 +97,8 @@ def _relative_artifact(root: Path, value: Any, field: str) -> Path:
 def _audit_trace(trace_path: Path, record: dict) -> dict[str, Any]:
     events = load_trace(trace_path)
     replay = replay_trace(trace_path)
-    if not replay.valid:
-        raise ValueError(f"invalid trace for {record['case_id']}")
     expected = {
+        "replay_valid": replay.valid,
         "run_status": replay.status,
         "prompt_tokens": replay.prompt_tokens,
         "completion_tokens": replay.completion_tokens,
@@ -137,6 +136,7 @@ def _audit_trace(trace_path: Path, record: dict) -> dict[str, Any]:
         "sha256": _sha256(trace_path),
         "run_id": replay.run_id,
         "event_count": replay.event_count,
+        "valid": replay.valid,
     }
 
 
