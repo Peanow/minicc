@@ -97,6 +97,16 @@ corecoder --context-strategy hybrid --tokenizer auto
 对于 DeepSeek 等 tiktoken 未知模型，`auto` 会使用近似计数并在 Trace 中标记为
 `approx`；不会把估算值伪装成精确 token。
 
+## Replay 与报告
+
+```bash
+corecoder replay .tmp/sample-run.jsonl
+corecoder report .tmp/sample-run.jsonl -o .tmp/sample-run.html
+```
+
+这两个命令不需要 API Key。Replay 不执行 Trace 中记录的工具，因此可以安全地用于
+完整性检查和指标汇总。
+
 ## Workspace 验证目录
 
 `workspace/` 是独立的功能验证沙盒，CoreCoder 在此操作不会影响项目源码。

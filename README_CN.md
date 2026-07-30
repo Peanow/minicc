@@ -133,6 +133,17 @@ corecoder --context-strategy hybrid
 计数器，避免把估算 token 当成精确结果。精确计数支持通过
 `pip install "corecoder[tokenizer]"` 安装。
 
+## Trace Replay 与 HTML 报告
+
+```bash
+corecoder replay .tmp/run.jsonl
+corecoder report .tmp/run.jsonl -o .tmp/run.html
+```
+
+Replay 不调用模型、也不重新执行工具，只校验 LLM/工具/Run 生命周期是否完整，
+重建调用数、token、耗时、状态和修改文件摘要。HTML 报告是无外部资源的单文件，
+可以直接用于调试或项目演示；工具输出会经过 HTML 转义。
+
 ## 架构
 
 整个项目一目了然：

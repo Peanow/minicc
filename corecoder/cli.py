@@ -3,6 +3,7 @@
 import sys
 import os
 import argparse
+import json
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -25,6 +26,7 @@ from .trace import JsonlTraceSink
 from .policy import ExecutionPolicy, PermissionMode
 from .context import create_context_strategy
 from .tokenizer import create_token_counter
+from .replay import generate_html_report, replay_trace
 from . import __version__
 
 console = Console()
@@ -33,7 +35,7 @@ console = Console()
 def _parse_args():
     p = argparse.ArgumentParser(
         prog="corecoder",
-        description="Minimal AI coding agent. Works with any OpenAI-compatible LLM.",
+        description="Observable multi-model coding agent experimentation runtime.",
     )
     p.add_argument("-m", "--model", help="Model name (default: $CORECODER_MODEL or gpt-4o)")
     p.add_argument("--base-url", help="API base URL (default: $OPENAI_BASE_URL)")
@@ -56,12 +58,48 @@ def _parse_args():
         choices=["auto", "approx", "tiktoken"],
         help="Token counter backend (default: auto)",
     )
+    subcommands = p.add_subparsers(dest="command")
+    replay_parser = subcommands.add_parser(
+        "replay",
+        help="Validate a trace and print a side-effect-free replay summary",
+    )
+    replay_parser.add_argument("trace_path")
+    report_parser = subcommands.add_parser(
+        "report",
+        help="Generate a self-contained HTML report from a trace",
+    )
+    report_parser.add_argument("trace_path")
+    report_parser.add_argument("-o", "--output")
     p.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
     return p.parse_args()
 
 
 def main():
     args = _parse_args()
+    if args.command == "replay":
+        try:
+            summary = replay_trace(args.trace_path)
+        except (OSError, ValueError) as exc:
+            console.print(f"[red]Replay failed:[/red] {exc}")
+            sys.exit(2)
+        print(json.dumps(summary.to_dict(), ensure_ascii=False, indent=2))
+        if not summary.valid:
+            sys.exit(1)
+        return
+    if args.command == "report":
+        output = args.output or str(
+            os.path.splitext(args.trace_path)[0] + ".html"
+        )
+        try:
+            summary = generate_html_report(args.trace_path, output)
+        except (OSError, ValueError) as exc:
+            console.print(f"[red]Report failed:[/red] {exc}")
+            sys.exit(2)
+        console.print(f"[green]Report written:[/green] {os.path.abspath(output)}")
+        if not summary.valid:
+            console.print("[yellow]Warning: trace validation reported errors.[/yellow]")
+        return
+
     config = Config.from_env()
 
     # CLI args override env vars

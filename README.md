@@ -44,6 +44,17 @@ local encoding are available, otherwise it records an explicit `approx`
 fallback in the trace. Install exact OpenAI-model counting with
 `pip install "corecoder[tokenizer]"`.
 
+## Trace replay and local reports
+
+```bash
+corecoder replay .tmp/run.jsonl
+corecoder report .tmp/run.jsonl -o .tmp/run.html
+```
+
+Replay is side-effect free: it neither calls a model nor executes a tool. It
+validates run, LLM, tool, and result lifecycles and reconstructs aggregate
+metrics. The report is a self-contained HTML timeline with escaped tool output.
+
 ---
 
 ```

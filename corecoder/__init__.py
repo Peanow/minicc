@@ -10,10 +10,12 @@ from corecoder.trace import JsonlTraceSink, RunResult
 from corecoder.policy import ExecutionPolicy, PermissionMode
 from corecoder.context import create_context_strategy
 from corecoder.tokenizer import create_token_counter
+from corecoder.replay import generate_html_report, replay_trace
 
 __all__ = [
     "Agent", "LLM", "Config", "ALL_TOOLS", "ToolRegistry",
     "JsonlTraceSink", "RunResult", "__version__",
     "ExecutionPolicy", "PermissionMode",
     "create_context_strategy", "create_token_counter",
+    "generate_html_report", "replay_trace",
 ]

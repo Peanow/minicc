@@ -268,7 +268,12 @@ class Agent:
                 duration_ms=round((time.perf_counter() - llm_started) * 1000, 2),
                 prompt_tokens=resp.prompt_tokens,
                 completion_tokens=resp.completion_tokens,
-                tool_calls=[tc.name for tc in resp.tool_calls],
+                content=resp.content,
+                tool_calls=[{
+                    "id": tc.id,
+                    "name": tc.name,
+                    "arguments": tc.arguments,
+                } for tc in resp.tool_calls],
             )
 
             # no tool calls -> LLM is done, return text
@@ -292,6 +297,12 @@ class Agent:
                 if on_tool:
                     on_tool(tc.name, tc.arguments)
                 result = self._exec_tool(tc)
+                self.trace.emit(
+                    "tool_result",
+                    tool_call_id=tc.id,
+                    tool=tc.name,
+                    content=result,
+                )
                 self.messages.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
@@ -300,6 +311,12 @@ class Agent:
             else:
                 results = self._exec_tools_parallel(resp.tool_calls, on_tool)
                 for tc, result in zip(resp.tool_calls, results):
+                    self.trace.emit(
+                        "tool_result",
+                        tool_call_id=tc.id,
+                        tool=tc.name,
+                        content=result,
+                    )
                     self.messages.append({
                         "role": "tool",
                         "tool_call_id": tc.id,
@@ -361,7 +378,7 @@ class Agent:
         """Execute a single tool call, returning the result string."""
         tool = self.tool_registry.get(tc.name)
         if tool is None:
-            self.trace.emit("tool_finished", tool=tc.name, status="unknown")
+            self.trace.emit("tool_rejected", tool=tc.name, reason="unknown tool")
             return f"Error: unknown tool '{tc.name}'"
 
         # ── PreToolUse hooks ──
