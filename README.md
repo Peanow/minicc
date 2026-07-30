@@ -32,6 +32,18 @@ affect the result.
 
 The permission engine is an application policy layer, not an OS sandbox.
 
+## Context strategy experiments
+
+Choose `truncate`, `summary`, or `hybrid` with `--context-strategy`.
+Truncate is deterministic and does not spend tokens on summarization; summary
+uses an LLM to compact old turns; hybrid combines tool-output snipping,
+structured summaries, and an emergency collapse.
+
+`--tokenizer auto` uses tiktoken only when the optional package and a supported
+local encoding are available, otherwise it records an explicit `approx`
+fallback in the trace. Install exact OpenAI-model counting with
+`pip install "corecoder[tokenizer]"`.
+
 ---
 
 ```

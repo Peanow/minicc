@@ -18,7 +18,8 @@
 
 - [x] 分层加载 `AGENTS.md`
 - [x] `.agents/skills/<name>/SKILL.md` 与渐进式加载
-- [ ] 可插拔上下文策略和真实 tokenizer
+- [x] `truncate`、`summary`、`hybrid` 可插拔上下文策略
+- [x] TokenCounter 抽象、可选 tiktoken 与未知模型显式回退
 - [x] `read-only`、`workspace-write`、`full-access` 权限模式
 - [x] 路径与 symlink 越界防护、Shell 审批骨架
 - [ ] 命令参数与网络行为细粒度分类

@@ -40,6 +40,7 @@ packages = ["corecoder"]
 [project.optional-dependencies]
 litellm = ["litellm>=1.60.0,<2.0.0"]
 memory-local = ["fastembed>=0.4"]
+tokenizer = ["tiktoken>=0.7"]
 dev = ["pytest>=7.0"]
 
 [project.scripts]

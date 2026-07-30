@@ -14,6 +14,7 @@ CoreCoder implements the same idea in 3 layers:
 
 from __future__ import annotations
 from typing import TYPE_CHECKING
+from .tokenizer import ApproxTokenCounter, TokenCounter
 
 if TYPE_CHECKING:
     from .llm import LLM
@@ -21,22 +22,28 @@ if TYPE_CHECKING:
 
 def _approx_tokens(text: str) -> int:
     """Rough token count. ~3.5 chars/token for mixed en/zh content."""
-    return len(text) // 3
+    return ApproxTokenCounter().count_text(text)
 
 
-def estimate_tokens(messages: list[dict]) -> int:
-    total = 0
-    for m in messages:
-        if m.get("content"):
-            total += _approx_tokens(m["content"])
-        if m.get("tool_calls"):
-            total += _approx_tokens(str(m["tool_calls"]))
-    return total
+def estimate_tokens(
+    messages: list[dict],
+    counter: TokenCounter | None = None,
+) -> int:
+    """Compatibility helper using the supplied counter or approximation."""
+    return (counter or ApproxTokenCounter()).count_messages(messages)
 
 
 class ContextManager:
-    def __init__(self, max_tokens: int = 128_000):
+    strategy_name = "hybrid"
+
+    def __init__(
+        self,
+        max_tokens: int = 128_000,
+        token_counter: TokenCounter | None = None,
+    ):
         self.max_tokens = max_tokens
+        self.token_counter = token_counter or ApproxTokenCounter()
+        self.last_operations: list[str] = []
         # layer thresholds (fraction of max_tokens)
         self._snip_at = int(max_tokens * 0.50)    # 50% -> snip tool outputs
         self._summarize_at = int(max_tokens * 0.70)  # 70% -> LLM summarize
@@ -44,27 +51,34 @@ class ContextManager:
 
     def maybe_compress(self, messages: list[dict], llm: LLM | None = None) -> bool:
         """Apply compression layers as needed. Returns True if any compression happened."""
-        current = estimate_tokens(messages)
+        self.last_operations = []
+        current = self.count_messages(messages)
         compressed = False
 
         # Layer 1: snip verbose tool outputs
         if current > self._snip_at:
             if self._snip_tool_outputs(messages):
                 compressed = True
-                current = estimate_tokens(messages)
+                self.last_operations.append("tool_snip")
+                current = self.count_messages(messages)
 
         # Layer 2: LLM-powered summarization of old turns
         if current > self._summarize_at and len(messages) > 10:
             if self._summarize_old(messages, llm, keep_recent=8):
                 compressed = True
-                current = estimate_tokens(messages)
+                self.last_operations.append("summary")
+                current = self.count_messages(messages)
 
         # Layer 3: hard collapse - last resort
         if current > self._collapse_at and len(messages) > 4:
             self._hard_collapse(messages, llm)
             compressed = True
+            self.last_operations.append("hard_collapse")
 
         return compressed
+
+    def count_messages(self, messages: list[dict]) -> int:
+        return self.token_counter.count_messages(messages)
 
     @staticmethod
     def _snip_tool_outputs(messages: list[dict]) -> bool:
@@ -194,3 +208,61 @@ class ContextManager:
         if errors:
             parts.append(f"Errors seen: {'; '.join(errors[:5])}")
         return "\n".join(parts) or "(no extractable context)"
+
+
+class TruncateContextStrategy(ContextManager):
+    """Dependency-free truncation with deterministic emergency collapse."""
+
+    strategy_name = "truncate"
+
+    def maybe_compress(self, messages: list[dict], llm: LLM | None = None) -> bool:
+        self.last_operations = []
+        current = self.count_messages(messages)
+        compressed = False
+        if current > self._snip_at and self._snip_tool_outputs(messages):
+            compressed = True
+            self.last_operations.append("tool_snip")
+            current = self.count_messages(messages)
+        if current > self._collapse_at and len(messages) > 4:
+            self._hard_collapse(messages, None)
+            compressed = True
+            self.last_operations.append("deterministic_collapse")
+        return compressed
+
+
+class SummaryContextStrategy(ContextManager):
+    """LLM summary strategy without the earlier tool-output snip layer."""
+
+    strategy_name = "summary"
+
+    def maybe_compress(self, messages: list[dict], llm: LLM | None = None) -> bool:
+        self.last_operations = []
+        current = self.count_messages(messages)
+        compressed = False
+        if current > self._summarize_at and len(messages) > 10:
+            if self._summarize_old(messages, llm, keep_recent=8):
+                compressed = True
+                self.last_operations.append("summary")
+                current = self.count_messages(messages)
+        if current > self._collapse_at and len(messages) > 4:
+            self._hard_collapse(messages, llm)
+            compressed = True
+            self.last_operations.append("hard_collapse")
+        return compressed
+
+
+def create_context_strategy(
+    name: str,
+    max_tokens: int = 128_000,
+    token_counter: TokenCounter | None = None,
+) -> ContextManager:
+    strategies = {
+        "truncate": TruncateContextStrategy,
+        "summary": SummaryContextStrategy,
+        "hybrid": ContextManager,
+    }
+    try:
+        strategy_class = strategies[name]
+    except KeyError as exc:
+        raise ValueError(f"unknown context strategy: {name}") from exc
+    return strategy_class(max_tokens=max_tokens, token_counter=token_counter)

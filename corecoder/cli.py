@@ -23,6 +23,8 @@ from .embedding import EmbeddingService
 from .prompt import system_prompt
 from .trace import JsonlTraceSink
 from .policy import ExecutionPolicy, PermissionMode
+from .context import create_context_strategy
+from .tokenizer import create_token_counter
 from . import __version__
 
 console = Console()
@@ -44,6 +46,16 @@ def _parse_args():
         choices=[mode.value for mode in PermissionMode],
         help="Tool permission mode (default: $CORECODER_PERMISSION_MODE or workspace-write)",
     )
+    p.add_argument(
+        "--context-strategy",
+        choices=["truncate", "summary", "hybrid"],
+        help="Context compression strategy (default: hybrid)",
+    )
+    p.add_argument(
+        "--tokenizer",
+        choices=["auto", "approx", "tiktoken"],
+        help="Token counter backend (default: auto)",
+    )
     p.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
     return p.parse_args()
 
@@ -61,6 +73,10 @@ def main():
         config.api_key = args.api_key
     if args.permission_mode:
         config.permission_mode = args.permission_mode
+    if args.context_strategy:
+        config.context_strategy = args.context_strategy
+    if args.tokenizer:
+        config.tokenizer_provider = args.tokenizer
 
     if not config.api_key:
         console.print("[red bold]No API key found.[/]")
@@ -102,6 +118,12 @@ def main():
         workspace=os.getcwd(),
         approval_callback=approval_callback,
     )
+    token_counter = create_token_counter(config.tokenizer_provider, config.model)
+    context = create_context_strategy(
+        config.context_strategy,
+        max_tokens=config.max_context_tokens,
+        token_counter=token_counter,
+    )
     agent = Agent(
         llm=llm,
         max_context_tokens=config.max_context_tokens,
@@ -110,6 +132,7 @@ def main():
         embedding=embedding,
         trace=trace,
         policy=policy,
+        context_strategy=context,
     )
 
     # fire SessionStart hooks
@@ -126,6 +149,7 @@ def main():
             if not args.model:
                 agent.llm.model = loaded_model
                 config.model = loaded_model
+                _refresh_context_for_model(agent, config)
             console.print(f"[green]Resumed session: {args.resume} (model: {agent.llm.model})[/green]")
         else:
             console.print(f"[red]Session '{args.resume}' not found.[/red]")
@@ -168,6 +192,15 @@ def _approve_tool(tool_name: str, arguments: dict, reason: str) -> bool:
     console.print(f"[dim]{reason}[/dim]")
     answer = console.input("Allow once? [y/N] ").strip().lower()
     return answer in {"y", "yes"}
+
+
+def _refresh_context_for_model(agent: Agent, config: Config):
+    """Rebuild model-dependent token counting without touching messages."""
+    agent.context = create_context_strategy(
+        config.context_strategy,
+        max_tokens=config.max_context_tokens,
+        token_counter=create_token_counter(config.tokenizer_provider, config.model),
+    )
 
 
 def _repl(agent: Agent, config: Config):
@@ -234,15 +267,20 @@ def _repl(agent: Agent, config: Config):
             if new_model:
                 agent.llm.model = new_model
                 config.model = new_model
+                _refresh_context_for_model(agent, config)
+                agent.trace.emit(
+                    "model_changed",
+                    model=new_model,
+                    token_counter=agent.context.token_counter.name,
+                )
                 console.print(f"Switched to [cyan]{new_model}[/cyan]")
             else:
                 console.print(f"Current model: [cyan]{config.model}[/cyan]")
             continue
         if user_input == "/compact":
-            from .context import estimate_tokens
-            before = estimate_tokens(agent.messages)
+            before = agent.context.count_messages(agent.messages)
             compressed = agent.context.maybe_compress(agent.messages, agent.llm)
-            after = estimate_tokens(agent.messages)
+            after = agent.context.count_messages(agent.messages)
             if compressed:
                 console.print(f"[green]Compressed: {before} → {after} tokens ({len(agent.messages)} messages)[/green]")
             else:

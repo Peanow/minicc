@@ -60,6 +60,8 @@ CORECODER_MODEL=deepseek-v4-flash
 CORECODER_PROVIDER=openai
 CORECODER_EMBEDDING_PROVIDER=none
 CORECODER_PERMISSION_MODE=workspace-write
+CORECODER_CONTEXT_STRATEGY=hybrid
+CORECODER_TOKENIZER=auto
 ```
 
 不要把真实密钥写入 README 或提交到 Git。复制 `.env.example` 为 `.env` 即可，
@@ -83,6 +85,17 @@ corecoder --permission-mode full-access
 
 `workspace-write` 是默认值：文件工具只能写工作区，Shell 命令需要逐次确认。
 `-p` 非交互模式无法确认，因此会拒绝需要确认的 Shell 命令。
+
+## 上下文策略
+
+```bash
+corecoder --context-strategy truncate
+corecoder --context-strategy summary
+corecoder --context-strategy hybrid --tokenizer auto
+```
+
+对于 DeepSeek 等 tiktoken 未知模型，`auto` 会使用近似计数并在 Trace 中标记为
+`approx`；不会把估算值伪装成精确 token。
 
 ## Workspace 验证目录
 

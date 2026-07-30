@@ -38,6 +38,8 @@ class Config:
     embedding_model: str = "BAAI/bge-small-zh-v1.5"
     embedding_dims: int = 512
     permission_mode: str = "workspace-write"
+    context_strategy: str = "hybrid"
+    tokenizer_provider: str = "auto"
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -62,4 +64,6 @@ class Config:
             embedding_model=os.getenv("CORECODER_EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5"),
             embedding_dims=int(os.getenv("CORECODER_EMBEDDING_DIMS", "512")),
             permission_mode=os.getenv("CORECODER_PERMISSION_MODE", "workspace-write"),
+            context_strategy=os.getenv("CORECODER_CONTEXT_STRATEGY", "hybrid"),
+            tokenizer_provider=os.getenv("CORECODER_TOKENIZER", "auto"),
         )

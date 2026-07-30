@@ -116,6 +116,23 @@ corecoder --permission-mode read-only
 
 这些规则是 Agent 运行时的应用层控制，不是操作系统沙箱。
 
+## 上下文策略
+
+```bash
+corecoder --context-strategy truncate --tokenizer approx
+corecoder --context-strategy summary
+corecoder --context-strategy hybrid
+```
+
+- `truncate`：裁剪旧工具输出，紧急情况下做确定性折叠，不额外调用 LLM。
+- `summary`：跳过早期裁剪，直接用 LLM 总结旧消息。
+- `hybrid`：工具裁剪、结构化摘要和硬折叠组合，也是默认策略。
+
+`--tokenizer auto` 会对 tiktoken 支持且本地编码可用的模型使用精确计数；
+未知模型（包括当前 DeepSeek 配置）明确回退到 `approx`。Trace 会记录实际使用的
+计数器，避免把估算 token 当成精确结果。精确计数支持通过
+`pip install "corecoder[tokenizer]"` 安装。
+
 ## 架构
 
 整个项目一目了然：

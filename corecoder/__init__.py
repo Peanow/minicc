@@ -8,9 +8,12 @@ from corecoder.config import Config
 from corecoder.tools import ALL_TOOLS, ToolRegistry
 from corecoder.trace import JsonlTraceSink, RunResult
 from corecoder.policy import ExecutionPolicy, PermissionMode
+from corecoder.context import create_context_strategy
+from corecoder.tokenizer import create_token_counter
 
 __all__ = [
     "Agent", "LLM", "Config", "ALL_TOOLS", "ToolRegistry",
     "JsonlTraceSink", "RunResult", "__version__",
     "ExecutionPolicy", "PermissionMode",
+    "create_context_strategy", "create_token_counter",
 ]

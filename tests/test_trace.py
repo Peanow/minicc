@@ -9,6 +9,7 @@ from corecoder.llm import LLMResponse, ToolCall
 from corecoder.tools import ToolRegistry
 from corecoder.tools.base import Tool
 from corecoder.trace import InMemoryTraceSink, JsonlTraceSink, redact
+from corecoder.context import create_context_strategy
 
 
 class EchoTool(Tool):
@@ -61,6 +62,9 @@ def test_agent_executes_its_private_tool_registry():
     assert result.status == "completed"
     assert result.final_answer == "done"
     assert result.prompt_tokens == 25
+    run_started = trace.events[0]
+    assert run_started["data"]["context_strategy"] == "hybrid"
+    assert run_started["data"]["token_counter"] == "approx"
     events = [event["event"] for event in trace.events]
     assert events == [
         "run_started",
@@ -107,3 +111,38 @@ def test_redact_nested_values():
         "api_key": "[REDACTED]",
         "prompt_tokens": 42,
     }
+
+
+def test_context_compaction_trace_records_strategy_and_counter():
+    class CharacterCounter:
+        name = "characters"
+
+        def count_text(self, text):
+            return len(text)
+
+        def count_messages(self, messages):
+            return sum(len(str(message.get("content") or "")) for message in messages)
+
+    trace = InMemoryTraceSink()
+    context = create_context_strategy(
+        "truncate",
+        max_tokens=3000,
+        token_counter=CharacterCounter(),
+    )
+    agent = Agent(
+        llm=FakeLLM(),
+        tools=[EchoTool()],
+        trace=trace,
+        context_strategy=context,
+    )
+    agent.messages = [{
+        "role": "tool",
+        "tool_call_id": "old",
+        "content": "\n".join("x" * 100 for _ in range(30)),
+    }]
+
+    assert agent._maybe_compress()
+    event = next(item for item in trace.events if item["event"] == "context_compacted")
+    assert event["data"]["strategy"] == "truncate"
+    assert event["data"]["token_counter"] == "characters"
+    assert "tool_snip" in event["data"]["operations"]

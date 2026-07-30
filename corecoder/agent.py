@@ -20,7 +20,8 @@ from .tools.agent import AgentTool
 from .tools.memory_search import MemorySearchTool
 from .tools.memory_save import MemorySaveTool
 from .prompt import system_prompt
-from .context import ContextManager
+from .context import ContextManager, create_context_strategy
+from .tokenizer import TokenCounter
 from .skills import Skill
 from .tools.skill import SkillTool
 from .hooks import HookConfig, HookEvent
@@ -47,6 +48,8 @@ class Agent:
         trace: TraceSink | None = None,
         instruction_sources=None,
         policy: ExecutionPolicy | None = None,
+        context_strategy: str | ContextManager = "hybrid",
+        token_counter: TokenCounter | None = None,
     ):
         self.llm = llm
         self.tool_registry = ToolRegistry(tools)
@@ -58,7 +61,15 @@ class Agent:
         self.policy = policy or ExecutionPolicy()
         self.active_skills: set[str] = set()
         self.messages: list[dict] = []
-        self.context = ContextManager(max_tokens=max_context_tokens)
+        self.context = (
+            context_strategy
+            if isinstance(context_strategy, ContextManager)
+            else create_context_strategy(
+                context_strategy,
+                max_tokens=max_context_tokens,
+                token_counter=token_counter,
+            )
+        )
         self.max_rounds = max_rounds
         self._last_status = "idle"
         self._closed = False
@@ -229,6 +240,8 @@ class Agent:
                 "source_bytes": source.source_bytes,
                 "truncated": source.truncated,
             } for source in self.instruction_sources],
+            context_strategy=self.context.strategy_name,
+            token_counter=self.context.token_counter.name,
         )
         self.messages.append({"role": "user", "content": user_input})
 
@@ -319,16 +332,17 @@ class Agent:
         )
 
     def _maybe_compress(self):
-        from .context import estimate_tokens
-
-        before = estimate_tokens(self.messages)
+        before = self.context.count_messages(self.messages)
         changed = self.context.maybe_compress(self.messages, self.llm)
         if changed:
             self.trace.emit(
                 "context_compacted",
                 before_tokens=before,
-                after_tokens=estimate_tokens(self.messages),
+                after_tokens=self.context.count_messages(self.messages),
                 message_count=len(self.messages),
+                strategy=self.context.strategy_name,
+                operations=self.context.last_operations,
+                token_counter=self.context.token_counter.name,
             )
         return changed
 

@@ -56,6 +56,8 @@ class AgentTool(Tool):
                 hooks=dict(parent.hooks.hooks),
                 source=parent.hooks.source,
             ),
+            context_strategy=parent.context.strategy_name,
+            token_counter=parent.context.token_counter,
         )
 
         try:
