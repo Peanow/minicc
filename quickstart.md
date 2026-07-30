@@ -83,8 +83,10 @@ corecoder --permission-mode workspace-write
 corecoder --permission-mode full-access
 ```
 
-`workspace-write` 是默认值：文件工具只能写工作区，Shell 命令需要逐次确认。
-`-p` 非交互模式无法确认，因此会拒绝需要确认的 Shell 命令。
+`workspace-write` 是默认值：文件工具只能写工作区，Shell 命令会先做风险分类。
+一小组只读命令会按参数分类后直接允许；代码执行、联网、破坏性、组合和
+未知命令仍需确认。`-p` 非交互模式无法确认，因此会拒绝这些请求，并把风险类别
+写入 Trace。
 
 ## 上下文策略
 

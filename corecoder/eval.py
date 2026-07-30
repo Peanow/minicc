@@ -100,6 +100,7 @@ class EvalRecord:
     wall_duration_ms: float
     estimated_cost_usd: float | None
     policy_denials: int
+    policy_denials_by_risk: dict[str, int]
     protected_files_unchanged: bool
     changed_files: list[str]
     checks: list[dict[str, Any]]
@@ -123,6 +124,7 @@ class EvalSummary:
     wall_duration_ms: float
     estimated_cost_usd: float | None
     policy_denials: int
+    policy_denials_by_risk: dict[str, int]
     by_model: dict[str, dict[str, Any]] = field(default_factory=dict)
     by_strategy: dict[str, dict[str, Any]] = field(default_factory=dict)
 
@@ -447,6 +449,19 @@ def _policy_denials(events: list[dict]) -> int:
     )
 
 
+def _policy_denials_by_risk(events: list[dict]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for event in events:
+        if event["event"] != "policy_decision":
+            continue
+        data = event.get("data") or {}
+        if data.get("decision") == "allow":
+            continue
+        risk = str(data.get("risk") or "unknown")
+        counts[risk] = counts.get(risk, 0) + 1
+    return dict(sorted(counts.items()))
+
+
 def _workspace_relative_files(paths: Iterable[str], workspace: Path) -> list[str]:
     workspace = workspace.resolve()
     normalized: set[str] = set()
@@ -557,6 +572,7 @@ def run_case(case: EvalCase, output_dir: Path) -> EvalRecord:
             wall_duration_ms=0,
             estimated_cost_usd=None,
             policy_denials=0,
+            policy_denials_by_risk={},
             protected_files_unchanged=True,
             changed_files=[],
             checks=[],
@@ -713,6 +729,7 @@ def run_case(case: EvalCase, output_dir: Path) -> EvalRecord:
         wall_duration_ms=wall_duration_ms,
         estimated_cost_usd=_estimate_cost(replay, case.model) if replay else None,
         policy_denials=_policy_denials(events),
+        policy_denials_by_risk=_policy_denials_by_risk(events),
         protected_files_unchanged=protected_files_unchanged,
         changed_files=changed_files,
         checks=checks,
@@ -743,6 +760,7 @@ def _group_metrics(records: list[EvalRecord], field_name: str) -> dict[str, dict
                 sum(record.wall_duration_ms for record in group),
                 2,
             ),
+            "policy_denials_by_risk": _merge_risk_counts(group),
         }
         for key, group in sorted(groups.items())
     }
@@ -768,9 +786,18 @@ def aggregate_records(records: Iterable[EvalRecord]) -> EvalSummary:
             else None
         ),
         policy_denials=sum(record.policy_denials for record in records),
+        policy_denials_by_risk=_merge_risk_counts(records),
         by_model=_group_metrics(records, "model_profile"),
         by_strategy=_group_metrics(records, "strategy_profile"),
     )
+
+
+def _merge_risk_counts(records: Iterable[EvalRecord]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for record in records:
+        for risk, count in record.policy_denials_by_risk.items():
+            counts[risk] = counts.get(risk, 0) + count
+    return dict(sorted(counts.items()))
 
 
 def run_evaluation(

@@ -1,6 +1,13 @@
 """Tests for application-level execution policy."""
 
-from corecoder.policy import Decision, ExecutionPolicy, PermissionMode
+import pytest
+
+from corecoder.policy import (
+    Decision,
+    ExecutionPolicy,
+    PermissionMode,
+    RiskClass,
+)
 
 
 def test_read_only_allows_search_and_denies_writes(tmp_path):
@@ -44,6 +51,15 @@ def test_shell_requires_approval_in_workspace_write(tmp_path):
     decision = approved.authorize("bash", {"command": "pytest"})
     assert decision.decision == Decision.ALLOW
     assert "user approved" in decision.reason
+    assert decision.risk == RiskClass.WORKSPACE_EXECUTION
+
+
+def test_workspace_write_allows_classified_read_only_shell(tmp_path):
+    policy = ExecutionPolicy("workspace-write", workspace=tmp_path)
+    result = policy.authorize("bash", {"command": "git diff -- app.py"})
+
+    assert result.decision == Decision.ALLOW
+    assert result.risk == RiskClass.READ_ONLY
 
 
 def test_read_only_bash_has_small_allowlist(tmp_path):
@@ -51,3 +67,29 @@ def test_read_only_bash_has_small_allowlist(tmp_path):
     assert policy.evaluate("bash", {"command": "git status"}).decision == Decision.ALLOW
     assert policy.evaluate("bash", {"command": "python app.py"}).decision == Decision.DENY
     assert policy.evaluate("bash", {"command": "ls | head"}).decision == Decision.DENY
+
+
+@pytest.mark.parametrize(
+    ("command", "risk"),
+    [
+        ("rg TODO .", RiskClass.READ_ONLY),
+        ("sed -n 1,20p app.py", RiskClass.READ_ONLY),
+        ("sed -i s/old/new/ app.py", RiskClass.WORKSPACE_EXECUTION),
+        ("python verify.py", RiskClass.WORKSPACE_EXECUTION),
+        ("pytest -q", RiskClass.WORKSPACE_EXECUTION),
+        ("git branch feature", RiskClass.WORKSPACE_EXECUTION),
+        ("curl https://example.com", RiskClass.NETWORK),
+        ("git pull", RiskClass.NETWORK),
+        ("pip install package", RiskClass.NETWORK),
+        ("npm view package", RiskClass.NETWORK),
+        ("rm output.txt", RiskClass.DESTRUCTIVE),
+        ("git reset --hard", RiskClass.DESTRUCTIVE),
+        ("git branch -D old", RiskClass.DESTRUCTIVE),
+        ("find . -delete", RiskClass.DESTRUCTIVE),
+        ("find . -exec echo {} ;", RiskClass.SHELL_COMPOSITION),
+        ("ls | head", RiskClass.SHELL_COMPOSITION),
+        ("custom-tool --flag", RiskClass.UNKNOWN),
+    ],
+)
+def test_shell_risk_classification(command, risk):
+    assert ExecutionPolicy.classify_shell(command)[0] == risk

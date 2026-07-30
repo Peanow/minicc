@@ -89,6 +89,8 @@ def test_agent_executes_its_private_tool_registry():
     ]
     tool_event = next(e for e in trace.events if e["event"] == "tool_finished")
     assert tool_event["data"]["output"] == "echo:hello"
+    policy_event = next(e for e in trace.events if e["event"] == "policy_decision")
+    assert policy_event["data"]["risk"] == "unknown"
 
 
 def test_jsonl_trace_is_append_only_and_redacted(tmp_path):

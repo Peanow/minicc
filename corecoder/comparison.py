@@ -20,6 +20,7 @@ class ProfileMetrics:
     wall_duration_ms: float
     estimated_cost_usd: float | None
     policy_denials: int
+    policy_denials_by_risk: dict[str, int]
     integrity_failures: int
 
     def to_dict(self) -> dict[str, Any]:
@@ -110,6 +111,10 @@ def summarize_comparison(
         costs_known = all(
             record.get("estimated_cost_usd") is not None for record in group
         )
+        risk_counts: dict[str, int] = {}
+        for record in group:
+            for risk, count in (record.get("policy_denials_by_risk") or {}).items():
+                risk_counts[str(risk)] = risk_counts.get(str(risk), 0) + int(count)
         profiles.append(ProfileMetrics(
             profile=profile,
             cases=len(group),
@@ -144,6 +149,7 @@ def summarize_comparison(
                 else None
             ),
             policy_denials=sum(int(record.get("policy_denials") or 0) for record in group),
+            policy_denials_by_risk=dict(sorted(risk_counts.items())),
             integrity_failures=sum(
                 not bool(record.get("protected_files_unchanged", True))
                 for record in group
@@ -159,6 +165,10 @@ def summarize_comparison(
 
 def _format_cost(value: float | None) -> str:
     return "unknown" if value is None else f"${value:.4f}"
+
+
+def _format_risks(values: dict[str, int]) -> str:
+    return ", ".join(f"{risk}: {count}" for risk, count in values.items()) or "—"
 
 
 def generate_comparison_report(
@@ -180,6 +190,7 @@ def generate_comparison_report(
         f"<td>{profile.wall_duration_ms / 1000:.2f}s</td>"
         f"<td>{html.escape(_format_cost(profile.estimated_cost_usd))}</td>"
         f"<td>{profile.policy_denials}</td>"
+        f"<td>{html.escape(_format_risks(profile.policy_denials_by_risk))}</td>"
         f"<td>{profile.integrity_failures}</td>"
         "</tr>"
         for profile in summary.profiles
@@ -242,7 +253,7 @@ border-bottom:0 }} .pass {{ color:var(--good);font-weight:700 }}
 <div class="table-wrap"><table>
 <thead><tr><th>Model / strategy</th><th>Passed</th><th>Success</th>
 <th>Tokens</th><th>Wall time</th><th>Cost</th><th>Policy denials</th>
-<th>Integrity failures</th></tr></thead>
+<th>Denied risk classes</th><th>Integrity failures</th></tr></thead>
 <tbody>{profile_rows}</tbody>
 </table></div>
 <h2>Task matrix</h2>

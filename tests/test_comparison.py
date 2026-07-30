@@ -41,7 +41,14 @@ def test_comparison_aggregates_profiles_and_tasks(tmp_path):
     second = tmp_path / "second"
     _write_results(first, [
         _record("task-a", "model-a", "hybrid", True),
-        _record("task-b", "model-a", "hybrid", False, policy_denials=2),
+        _record(
+            "task-b",
+            "model-a",
+            "hybrid",
+            False,
+            policy_denials=2,
+            policy_denials_by_risk={"network": 2},
+        ),
     ])
     _write_results(second, [
         _record("task-a", "model-b", "truncate", True),
@@ -55,6 +62,7 @@ def test_comparison_aggregates_profiles_and_tasks(tmp_path):
     assert summary.tasks == ["task-a", "task-b"]
     assert summary.profiles[0].success_rate == 0.5
     assert summary.profiles[0].policy_denials == 2
+    assert summary.profiles[0].policy_denials_by_risk == {"network": 2}
     assert summary.profiles[0].estimated_cost_usd is None
 
 

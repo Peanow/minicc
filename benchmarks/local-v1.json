@@ -183,6 +183,78 @@
       ],
       "protected_paths": ["verify.py"],
       "tags": ["python", "api", "pagination"]
+    },
+    {
+      "id": "python-config-precedence",
+      "fixture": "tasks/python-config-precedence",
+      "prompt": "Implement resolve_config in config_layers.py. Merge defaults, file values, environment values, and CLI values in that precedence order; a value of None means 'not supplied' and must not overwrite a lower layer. Return a new dictionary and never mutate inputs. Run verify.py.",
+      "checks": [
+        {
+          "argv": ["python", "verify.py"]
+        }
+      ],
+      "protected_paths": ["verify.py"],
+      "tags": ["python", "configuration", "precedence"]
+    },
+    {
+      "id": "python-event-deduplication",
+      "fixture": "tasks/python-event-deduplication",
+      "prompt": "Implement deduplicate_events in events.py. Keep one event per id using the greatest timestamp; when timestamps tie, the later input wins. Return events ordered by each id's first appearance, do not mutate inputs, and raise ValueError when an event lacks id or timestamp. Run verify.py.",
+      "checks": [
+        {
+          "argv": ["python", "verify.py"]
+        }
+      ],
+      "protected_paths": ["verify.py"],
+      "tags": ["python", "events", "data-processing"]
+    },
+    {
+      "id": "python-sse-parser",
+      "fixture": "tasks/python-sse-parser",
+      "prompt": "Implement parse_sse in sse.py for an iterable of text lines. Ignore comment lines, collect one or more data: lines until a blank separator, join multiple data values with a newline, emit the final pending event at EOF, and stop without emitting when data is [DONE]. Run verify.py.",
+      "checks": [
+        {
+          "argv": ["python", "verify.py"]
+        }
+      ],
+      "protected_paths": ["verify.py"],
+      "tags": ["python", "streaming", "protocol"]
+    },
+    {
+      "id": "python-tool-arguments",
+      "fixture": "tasks/python-tool-arguments",
+      "prompt": "Implement validate_arguments in tool_schema.py for object-style tool schemas. Report missing required fields, unexpected fields when additionalProperties is false, and type mismatches for string, integer, number, boolean, array, and object. Treat bool as distinct from integer/number. Return a stable list of human-readable errors and do not mutate inputs. Run verify.py.",
+      "checks": [
+        {
+          "argv": ["python", "verify.py"]
+        }
+      ],
+      "protected_paths": ["verify.py"],
+      "tags": ["python", "tools", "validation"]
+    },
+    {
+      "id": "python-message-budget",
+      "fixture": "tasks/python-message-budget",
+      "prompt": "Implement select_messages in budget.py. Keep the first system message when present, then retain the largest contiguous suffix of remaining messages whose counter costs fit the remaining budget. Return new message dictionaries, reject negative budgets, and do not mutate inputs. Run verify.py.",
+      "checks": [
+        {
+          "argv": ["python", "verify.py"]
+        }
+      ],
+      "protected_paths": ["verify.py"],
+      "tags": ["python", "context", "token-budget"]
+    },
+    {
+      "id": "python-circuit-breaker",
+      "fixture": "tasks/python-circuit-breaker",
+      "prompt": "Complete CircuitBreaker in circuit.py without changing its public API. Open after failure_threshold consecutive failures, raise CircuitOpenError without calling the operation during the cooldown, allow one half-open trial after recovery_seconds, reset on success, and reopen on a failed trial. Use the injected clock. Run verify.py.",
+      "checks": [
+        {
+          "argv": ["python", "verify.py"]
+        }
+      ],
+      "protected_paths": ["verify.py"],
+      "tags": ["python", "reliability", "state-machine"]
     }
   ]
 }

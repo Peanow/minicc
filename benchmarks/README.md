@@ -20,7 +20,7 @@ corecoder eval benchmarks/local-v1.json --dry-run \
   --task python-safe-path --strategy hybrid-workspace
 ```
 
-`local-v1.json` currently contains twelve deliberately unsolved local tasks and two
+`local-v1.json` contains eighteen deliberately unsolved local tasks and two
 enabled strategy profiles. The comparison model and summary strategy are
 disabled until their connection and cost settings are supplied explicitly.
 
@@ -105,6 +105,8 @@ Success requires all of the following:
 5. every deterministic check passes.
 
 Token counts and lifecycle duration come from the trace; wall duration also
-includes deterministic checks. Aggregate cost remains `null` unless every case
-has both input and output prices in its model profile. This prevents partial,
-unknown, or outdated pricing from being presented as measured total cost.
+includes deterministic checks. Policy denials are grouped into read-only,
+workspace-execution, network, destructive, shell-composition, and unknown risk
+classes. Aggregate cost remains `null` unless every case has both input and
+output prices in its model profile. This prevents partial, unknown, or outdated
+pricing from being presented as measured total cost.

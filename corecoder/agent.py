@@ -412,6 +412,7 @@ class Agent:
             tool=tc.name,
             decision=policy.decision.value,
             reason=policy.reason,
+            risk=policy.risk.value,
         )
         if policy.decision != Decision.ALLOW:
             return f"Blocked by policy: {policy.reason}"

@@ -41,6 +41,7 @@ def _record(**overrides):
         "wall_duration_ms": 120.0,
         "estimated_cost_usd": 0.001,
         "policy_denials": 0,
+        "policy_denials_by_risk": {},
         "protected_files_unchanged": True,
         "changed_files": ["app.py"],
         "checks": [{"passed": True}],
@@ -58,8 +59,8 @@ def test_bundled_manifest_expands_enabled_matrix():
     cases = plan_cases(manifest)
 
     assert manifest.name == "local-v1"
-    assert len(manifest.tasks) == 12
-    assert len(cases) == 24
+    assert len(manifest.tasks) == 18
+    assert len(cases) == 36
     assert cases[0].id == (
         "python-inclusive-range__deepseek-v4-flash__hybrid-workspace"
     )
@@ -116,6 +117,7 @@ def test_aggregate_records_does_not_report_partial_cost():
             wall_duration_ms=250,
             estimated_cost_usd=None,
             policy_denials=2,
+            policy_denials_by_risk={"network": 2},
         ),
     ]
 
@@ -129,6 +131,7 @@ def test_aggregate_records_does_not_report_partial_cost():
     assert summary.wall_duration_ms == 370
     assert summary.estimated_cost_usd is None
     assert summary.policy_denials == 2
+    assert summary.policy_denials_by_risk == {"network": 2}
     assert summary.by_model["model"]["cases"] == 2
 
 
@@ -230,6 +233,12 @@ def test_run_evaluation_writes_reproducibility_metadata(tmp_path, monkeypatch):
         "python-secret-redaction",
         "python-lazy-batches",
         "python-cursor-pagination",
+        "python-config-precedence",
+        "python-event-deduplication",
+        "python-sse-parser",
+        "python-tool-arguments",
+        "python-message-budget",
+        "python-circuit-breaker",
     ],
 )
 def test_benchmark_fixture_starts_unsolved(task):

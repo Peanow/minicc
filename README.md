@@ -27,8 +27,14 @@ affect the result.
   `AGENTS.override.md` wins within a directory.
 - Skills use `.agents/skills/<name>/SKILL.md` and load progressively.
 - Permission modes are `read-only`, `workspace-write`, and `full-access`.
-  Workspace-write confines file tools to the workspace and asks before shell
-  commands. Non-interactive runs deny requests that require approval.
+  Workspace-write confines file tools to the workspace, directly allows a
+  narrow set of classified read-only shell commands, and asks before code
+  execution, network, destructive, composed, or unknown commands.
+
+Every Shell decision records one of six risk classes: `read-only`,
+`workspace-execution`, `network`, `destructive`, `shell-composition`, or
+`unknown`. Non-interactive runs deny requests that require approval, and
+evaluation summaries preserve denial counts by risk class.
 
 The permission engine is an application policy layer, not an OS sandbox.
 
@@ -82,11 +88,13 @@ corecoder eval benchmarks/local-v1.json \
   -o benchmarks/results/local-v1-smoke
 ```
 
-The benchmark currently contains twelve deliberately unsolved fixtures across
+The benchmark currently contains eighteen deliberately unsolved fixtures across
 bug fixing, parsing, state, path security, multi-file editing, scoped
 instructions, retries, configuration merging, dependency ordering, redaction,
-lazy batching, and cursor pagination. Verifiers are hash-protected so an agent
-cannot pass by rewriting its checks. See
+lazy batching, cursor pagination, configuration precedence, event
+deduplication, SSE parsing, tool argument validation, message budgeting, and
+circuit breaking. Verifiers are hash-protected so an agent cannot pass by
+rewriting its checks. See
 [`benchmarks/README.md`](benchmarks/README.md) for the evidence format and
 metric policy.
 

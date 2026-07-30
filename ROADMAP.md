@@ -22,13 +22,14 @@
 - [x] TokenCounter 抽象、可选 tiktoken 与未知模型显式回退
 - [x] `read-only`、`workspace-write`、`full-access` 权限模式
 - [x] 路径与 symlink 越界防护、Shell 审批骨架
-- [ ] 命令参数与网络行为细粒度分类
+- [x] 命令参数与网络/执行/破坏/组合风险细粒度分类
 
 ## Milestone 3：评测与报告
 
 - [x] 无副作用 Trace 生命周期 Replay 与指标重建
 - [x] 基于录制响应与请求指纹的 Agent Runtime 确定性 Replay
-- [ ] 18 个本地确定性任务与 6 个外部任务（当前 12/18、0/6）
+- [x] 18 个本地确定性任务
+- [ ] 6 个外部任务（当前 0/6）
 - [x] 多模型、多策略评测 manifest 与选择性执行
 - [x] 成功率、token、耗时、可选成本和策略拒绝指标
 - [x] 校验器防篡改、fixture/manifest 哈希与隔离运行

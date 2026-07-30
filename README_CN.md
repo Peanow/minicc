@@ -110,9 +110,13 @@ corecoder --permission-mode read-only
 ## 权限模式
 
 - `read-only`：允许读取、搜索和少量只读 Shell 命令。
-- `workspace-write`：允许工作区内编辑，Shell 命令需要交互确认；
-  非交互模式无法确认时默认拒绝。
+- `workspace-write`：允许工作区内编辑和一小组已分类的只读 Shell 命令；代码执行、
+  联网、破坏性、Shell 组合或未知命令需要交互确认，非交互模式默认拒绝。
 - `full-access`：跳过应用权限层，仍会经过 Bash 工具自身的危险命令检查。
+
+每次 Shell 决策都会记录 `read-only`、`workspace-execution`、`network`、
+`destructive`、`shell-composition` 或 `unknown` 风险类别；评测汇总会按风险类别
+统计拒绝次数。
 
 这些规则是 Agent 运行时的应用层控制，不是操作系统沙箱。
 
@@ -169,9 +173,10 @@ corecoder eval benchmarks/local-v1.json \
   -o benchmarks/results/local-v1-smoke
 ```
 
-当前包含 12 个刻意保持未解决状态的本地任务，覆盖边界修复、解析、状态、路径安全、
-多文件修改、分层指令、重试、配置合并、依赖排序、脱敏、批处理和游标分页。评测器
-会在运行前后校验 `verify.py` 哈希，避免 Agent 通过篡改测试“刷成功率”。证据目录格式和指标口径见
+当前包含 18 个刻意保持未解决状态的本地任务，覆盖边界修复、解析、状态、路径安全、
+多文件修改、分层指令、重试、配置合并、依赖排序、脱敏、批处理、游标分页、配置
+优先级、事件去重、SSE、工具参数校验、消息预算和熔断器。评测器会在运行前后校验
+`verify.py` 哈希，避免 Agent 通过篡改测试“刷成功率”。证据目录格式和指标口径见
 [`benchmarks/README.md`](benchmarks/README.md)。
 
 多个结果目录可以生成单文件对比报告：
