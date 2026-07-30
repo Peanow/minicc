@@ -9,13 +9,18 @@ append-only Trace, verifier-integrity checks, and commit-safe evidence export.
 `local-v1.json` contains 18 dependency-free tasks. It is designed for quick
 runtime regression, policy checks, and controlled context-strategy comparison.
 The default matrix runs every task three times with `hybrid`, `truncate`, and
-`summary` under the same 12,000-token context budget.
+`summary` under the same 32,000-token context budget. Budget accounting includes
+the system prompt and tool schemas as well as conversation messages.
 
 Tier 1 is not presented as a general coding-quality benchmark.
 
 ## Tier 2 — small real repositories
 
 Tier 2 will contain 8–12 pinned, license-compatible repository snapshots.
+The current pilot reproduces python-diskcache PR #288 from its pre-fix commit;
+it retains the Apache-2.0 license and keeps the upstream regression assertion
+outside the Agent workspace.
+
 Every task must include:
 
 - upstream repository URL, immutable commit, license, and issue/PR provenance;

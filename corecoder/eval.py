@@ -415,6 +415,10 @@ def _parse_provenance(
         )
     if issue and not issue.startswith("https://"):
         raise ValueError(f"task {task_id}.provenance.issue must use https://")
+    if required and issue is None:
+        raise ValueError(
+            f"Tier 2 task {task_id} must define issue or PR provenance"
+        )
     return TaskProvenance(
         repository=repository,
         commit=commit.lower(),

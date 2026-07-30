@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "name": "tier2-real-repos-pilot",
+  "tier": "tier2",
+  "repetitions": 3,
+  "models": [
+    {
+      "id": "deepseek-v4-flash",
+      "model": "deepseek-v4-flash",
+      "base_url": "https://api.deepseek.com",
+      "api_key_env": "OPENAI_API_KEY",
+      "enabled": true
+    }
+  ],
+  "strategies": [
+    {
+      "id": "hybrid-workspace",
+      "context_strategy": "hybrid",
+      "permission_mode": "workspace-write",
+      "tokenizer": "auto",
+      "max_context_tokens": 32000,
+      "enabled": true
+    },
+    {
+      "id": "truncate-workspace",
+      "context_strategy": "truncate",
+      "permission_mode": "workspace-write",
+      "tokenizer": "auto",
+      "max_context_tokens": 32000,
+      "enabled": true
+    },
+    {
+      "id": "summary-workspace",
+      "context_strategy": "summary",
+      "permission_mode": "workspace-write",
+      "tokenizer": "auto",
+      "max_context_tokens": 32000,
+      "enabled": true
+    }
+  ],
+  "tasks": [
+    {
+      "id": "diskcache-peek-large-file",
+      "fixture": "tier2/tasks/diskcache-peek-large-file",
+      "prompt": "Fix the Deque.peek regression described in upstream PR #288. When a cached value is large enough to be stored in a file, peeking must return the value without deleting or invalidating the backing data, and repeated peeks must remain safe. Preserve the public API, keep the change focused, and run the existing Deque tests.",
+      "checks": [
+        {
+          "argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-o",
+            "addopts=",
+            "tests/test_deque.py"
+          ],
+          "timeout_seconds": 60
+        }
+      ],
+      "hidden_checks": [
+        {
+          "path": "tier2/hidden/diskcache-peek-large-file.py",
+          "timeout_seconds": 15
+        }
+      ],
+      "protected_paths": [
+        "tests/test_deque.py",
+        "LICENSE",
+        "UPSTREAM.md"
+      ],
+      "expected_change_paths": [
+        "diskcache/core.py"
+      ],
+      "provenance": {
+        "repository": "https://github.com/grantjenks/python-diskcache",
+        "commit": "4d3068625a3edcd2f5a1f6f104ef621f1f7ea395",
+        "license": "Apache-2.0",
+        "issue": "https://github.com/grantjenks/python-diskcache/pull/288"
+      },
+      "tags": [
+        "python",
+        "real-repository",
+        "bugfix",
+        "file-backed-storage",
+        "failure-diagnosis"
+      ],
+      "timeout_seconds": 420
+    }
+  ]
+}

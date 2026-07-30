@@ -24,7 +24,7 @@
       "context_strategy": "hybrid",
       "permission_mode": "workspace-write",
       "tokenizer": "auto",
-      "max_context_tokens": 12000,
+      "max_context_tokens": 32000,
       "enabled": true
     },
     {
@@ -32,7 +32,7 @@
       "context_strategy": "truncate",
       "permission_mode": "workspace-write",
       "tokenizer": "auto",
-      "max_context_tokens": 12000,
+      "max_context_tokens": 32000,
       "enabled": true
     },
     {
@@ -40,7 +40,7 @@
       "context_strategy": "summary",
       "permission_mode": "workspace-write",
       "tokenizer": "auto",
-      "max_context_tokens": 12000,
+      "max_context_tokens": 32000,
       "enabled": true
     }
   ],

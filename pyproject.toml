@@ -46,6 +46,9 @@ dev = ["pytest>=7.0"]
 [project.scripts]
 corecoder = "corecoder.cli:main"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [project.urls]
 Homepage = "https://github.com/he-yufeng/CoreCoder"
 Repository = "https://github.com/he-yufeng/CoreCoder"

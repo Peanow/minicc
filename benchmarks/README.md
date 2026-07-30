@@ -30,6 +30,15 @@ default matrix repeats every task three times across `hybrid`, `truncate`, and
 checks. The comparison model stays disabled until its connection and cost
 settings are supplied explicitly.
 
+The first Tier 2 pilot is a pinned python-diskcache regression:
+
+```bash
+corecoder eval benchmarks/tier2-pilot.json --dry-run --repeat 1
+```
+
+Its curated snapshot records the upstream commit, PR, and Apache-2.0 license
+in both the manifest and `UPSTREAM.md`.
+
 ## Run cases
 
 ```bash

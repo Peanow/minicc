@@ -111,6 +111,10 @@ edits, failure recovery, and context compactions by model/strategy, then builds
 a per-task outcome matrix. Tier 1 repeats `hybrid`, `truncate`, and `summary`
 three times under the same token budget.
 
+Tier 2 has started with a pinned python-diskcache PR #288 regression fixture,
+including upstream commit/PR provenance, retained license, and an
+evaluator-only hidden check.
+
 Before committing benchmark evidence, audit the source traces and export only
 portable metrics and hashes:
 

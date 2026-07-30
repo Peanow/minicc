@@ -170,4 +170,7 @@ def test_context_compaction_trace_records_strategy_and_counter():
     event = next(item for item in trace.events if item["event"] == "context_compacted")
     assert event["data"]["strategy"] == "truncate"
     assert event["data"]["token_counter"] == "characters"
+    assert event["data"]["fixed_tokens"] > 0
+    assert event["data"]["before_tokens"] > event["data"]["after_tokens"]
     assert "tool_snip" in event["data"]["operations"]
+    assert event["data"]["after_tokens"] == agent.context_tokens()

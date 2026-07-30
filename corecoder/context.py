@@ -49,10 +49,16 @@ class ContextManager:
         self._summarize_at = int(max_tokens * 0.70)  # 70% -> LLM summarize
         self._collapse_at = int(max_tokens * 0.90)   # 90% -> hard collapse
 
-    def maybe_compress(self, messages: list[dict], llm: LLM | None = None) -> bool:
+    def maybe_compress(
+        self,
+        messages: list[dict],
+        llm: LLM | None = None,
+        *,
+        fixed_tokens: int = 0,
+    ) -> bool:
         """Apply compression layers as needed. Returns True if any compression happened."""
         self.last_operations = []
-        current = self.count_messages(messages)
+        current = self.count_messages(messages) + fixed_tokens
         compressed = False
 
         # Layer 1: snip verbose tool outputs
@@ -60,14 +66,14 @@ class ContextManager:
             if self._snip_tool_outputs(messages):
                 compressed = True
                 self.last_operations.append("tool_snip")
-                current = self.count_messages(messages)
+                current = self.count_messages(messages) + fixed_tokens
 
         # Layer 2: LLM-powered summarization of old turns
         if current > self._summarize_at and len(messages) > 10:
             if self._summarize_old(messages, llm, keep_recent=8):
                 compressed = True
                 self.last_operations.append("summary")
-                current = self.count_messages(messages)
+                current = self.count_messages(messages) + fixed_tokens
 
         # Layer 3: hard collapse - last resort
         if current > self._collapse_at and len(messages) > 4:
@@ -215,14 +221,20 @@ class TruncateContextStrategy(ContextManager):
 
     strategy_name = "truncate"
 
-    def maybe_compress(self, messages: list[dict], llm: LLM | None = None) -> bool:
+    def maybe_compress(
+        self,
+        messages: list[dict],
+        llm: LLM | None = None,
+        *,
+        fixed_tokens: int = 0,
+    ) -> bool:
         self.last_operations = []
-        current = self.count_messages(messages)
+        current = self.count_messages(messages) + fixed_tokens
         compressed = False
         if current > self._snip_at and self._snip_tool_outputs(messages):
             compressed = True
             self.last_operations.append("tool_snip")
-            current = self.count_messages(messages)
+            current = self.count_messages(messages) + fixed_tokens
         if current > self._collapse_at and len(messages) > 4:
             self._hard_collapse(messages, None)
             compressed = True
@@ -235,15 +247,21 @@ class SummaryContextStrategy(ContextManager):
 
     strategy_name = "summary"
 
-    def maybe_compress(self, messages: list[dict], llm: LLM | None = None) -> bool:
+    def maybe_compress(
+        self,
+        messages: list[dict],
+        llm: LLM | None = None,
+        *,
+        fixed_tokens: int = 0,
+    ) -> bool:
         self.last_operations = []
-        current = self.count_messages(messages)
+        current = self.count_messages(messages) + fixed_tokens
         compressed = False
         if current > self._summarize_at and len(messages) > 10:
             if self._summarize_old(messages, llm, keep_recent=8):
                 compressed = True
                 self.last_operations.append("summary")
-                current = self.count_messages(messages)
+                current = self.count_messages(messages) + fixed_tokens
         if current > self._collapse_at and len(messages) > 4:
             self._hard_collapse(messages, llm)
             compressed = True

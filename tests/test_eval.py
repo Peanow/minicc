@@ -19,6 +19,7 @@ from corecoder.eval import (
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = REPO_ROOT / "benchmarks" / "local-v1.json"
+TIER2_MANIFEST_PATH = REPO_ROOT / "benchmarks" / "tier2-pilot.json"
 
 
 def _record(**overrides):
@@ -144,6 +145,46 @@ def test_tier2_manifest_requires_pinned_repository_provenance(tmp_path):
     loaded = load_manifest(path)
     assert loaded.tasks[0].provenance.commit == "a" * 40
 
+    manifest["tasks"][0]["provenance"].pop("issue")
+    path.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="issue or PR provenance"):
+        load_manifest(path)
+
+
+def test_tier2_pilot_is_pinned_and_starts_with_hidden_regression():
+    manifest = load_manifest(TIER2_MANIFEST_PATH)
+    cases = plan_cases(manifest, repetitions=1)
+    task = manifest.tasks[0]
+
+    assert manifest.tier == "tier2"
+    assert len(cases) == 3
+    assert task.provenance.license == "Apache-2.0"
+    assert task.provenance.issue.endswith("/pull/288")
+    public = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            "-o",
+            "addopts=",
+            "tests/test_deque.py",
+        ],
+        cwd=task.fixture,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert public.returncode == 0
+    hidden = subprocess.run(
+        [sys.executable, str(task.hidden_checks[0].path)],
+        cwd=task.fixture,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert hidden.returncode != 0
+
 
 def test_aggregate_records_does_not_report_partial_cost():
     records = [
@@ -255,7 +296,7 @@ def test_run_case_rejects_modified_verifier(tmp_path, monkeypatch):
     assert record.workspace_changed_files == ["verify.py"]
     assert record.unrelated_file_modification_rate == 1.0
     assert record.hidden_checks_total == 1
-    assert seen_environments[0]["CORECODER_MAX_CONTEXT"] == "12000"
+    assert seen_environments[0]["CORECODER_MAX_CONTEXT"] == "32000"
     assert "CORECODER_API_KEY" not in seen_environments[-1]
     events = load_trace(tmp_path / record.trace_path)
     measured = events[-1]

@@ -107,6 +107,22 @@ def test_truncate_strategy_never_calls_llm():
     assert strategy.count_messages(messages) < 5000
 
 
+def test_fixed_prompt_tokens_participate_in_compaction_threshold():
+    messages = _long_tool_messages(count=1)
+    strategy = TruncateContextStrategy(
+        max_tokens=5000,
+        token_counter=CharacterCounter(),
+    )
+    raw_message_tokens = strategy.count_messages(messages)
+    assert raw_message_tokens < strategy._snip_at
+
+    assert strategy.maybe_compress(
+        messages,
+        fixed_tokens=strategy._snip_at,
+    )
+    assert "tool_snip" in strategy.last_operations
+
+
 def test_summary_strategy_records_summary_operation():
     messages = [
         {"role": "user", "content": f"request {index} " + "x" * 100}

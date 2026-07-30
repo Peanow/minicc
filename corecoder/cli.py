@@ -452,9 +452,9 @@ def _repl(agent: Agent, config: Config):
                 console.print(f"Current model: [cyan]{config.model}[/cyan]")
             continue
         if user_input == "/compact":
-            before = agent.context.count_messages(agent.messages)
-            compressed = agent.context.maybe_compress(agent.messages, agent.llm)
-            after = agent.context.count_messages(agent.messages)
+            before = agent.context_tokens()
+            compressed = agent._maybe_compress()
+            after = agent.context_tokens()
             if compressed:
                 console.print(f"[green]Compressed: {before} → {after} tokens ({len(agent.messages)} messages)[/green]")
             else:

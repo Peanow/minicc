@@ -10,6 +10,7 @@ which means it's done working and ready to report back.
 """
 
 import concurrent.futures
+import json
 import time
 from dataclasses import replace
 
@@ -225,6 +226,29 @@ class Agent:
     def _tool_schemas(self) -> list[dict]:
         return self.tool_registry.schemas()
 
+    def _fixed_context_tokens(self) -> int:
+        """Tokens sent on every request outside the mutable message history."""
+        return (
+            self.context.token_counter.count_messages([{
+                "role": "system",
+                "content": self._system,
+            }])
+            + self.context.token_counter.count_text(
+                json.dumps(
+                    self._tool_schemas(),
+                    ensure_ascii=False,
+                    default=str,
+                )
+            )
+        )
+
+    def context_tokens(self) -> int:
+        """Estimate the complete request context using the active counter."""
+        return (
+            self._fixed_context_tokens()
+            + self.context.count_messages(self.messages)
+        )
+
     def chat(self, user_input: str, on_token=None, on_tool=None) -> str:
         """Process one user message. May involve multiple LLM/tool rounds."""
         self._last_status = "running"
@@ -359,13 +383,19 @@ class Agent:
         )
 
     def _maybe_compress(self):
-        before = self.context.count_messages(self.messages)
-        changed = self.context.maybe_compress(self.messages, self.llm)
+        fixed_tokens = self._fixed_context_tokens()
+        before = self.context_tokens()
+        changed = self.context.maybe_compress(
+            self.messages,
+            self.llm,
+            fixed_tokens=fixed_tokens,
+        )
         if changed:
             self.trace.emit(
                 "context_compacted",
                 before_tokens=before,
-                after_tokens=self.context.count_messages(self.messages),
+                after_tokens=self.context_tokens(),
+                fixed_tokens=fixed_tokens,
                 message_count=len(self.messages),
                 strategy=self.context.strategy_name,
                 operations=self.context.last_operations,
