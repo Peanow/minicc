@@ -1,0 +1,79 @@
+{
+  "by_model": {
+    "deepseek-v4-flash": {
+      "cases": 3,
+      "context_compactions": 12,
+      "duration_ms": 447257.78,
+      "failure_recovery_rate": 0.6667,
+      "hidden_checks_passed": 2,
+      "hidden_checks_total": 3,
+      "hidden_pass_rate": 0.6667,
+      "mean_edit_precision": 0.5,
+      "mean_unrelated_file_modification_rate": 0.5,
+      "policy_denials_by_risk": {
+        "destructive": 1,
+        "network": 1,
+        "shell-composition": 17,
+        "unknown": 1,
+        "workspace-execution": 5
+      },
+      "recovered_runs": 2,
+      "runs_with_tool_failures": 3,
+      "success_rate": 0.6667,
+      "successful": 2,
+      "tokens": 1193936,
+      "wall_duration_ms": 451791.09
+    }
+  },
+  "by_strategy": {
+    "summary-workspace": {
+      "cases": 3,
+      "context_compactions": 12,
+      "duration_ms": 447257.78,
+      "failure_recovery_rate": 0.6667,
+      "hidden_checks_passed": 2,
+      "hidden_checks_total": 3,
+      "hidden_pass_rate": 0.6667,
+      "mean_edit_precision": 0.5,
+      "mean_unrelated_file_modification_rate": 0.5,
+      "policy_denials_by_risk": {
+        "destructive": 1,
+        "network": 1,
+        "shell-composition": 17,
+        "unknown": 1,
+        "workspace-execution": 5
+      },
+      "recovered_runs": 2,
+      "runs_with_tool_failures": 3,
+      "success_rate": 0.6667,
+      "successful": 2,
+      "tokens": 1193936,
+      "wall_duration_ms": 451791.09
+    }
+  },
+  "completion_tokens": 27421,
+  "context_compactions": 12,
+  "duration_ms": 447257.78,
+  "estimated_cost_usd": null,
+  "failure_recovery_rate": 0.6667,
+  "hidden_checks_passed": 2,
+  "hidden_checks_total": 3,
+  "hidden_pass_rate": 0.6667,
+  "mean_edit_precision": 0.5,
+  "mean_unrelated_file_modification_rate": 0.5,
+  "policy_denials": 25,
+  "policy_denials_by_risk": {
+    "destructive": 1,
+    "network": 1,
+    "shell-composition": 17,
+    "unknown": 1,
+    "workspace-execution": 5
+  },
+  "prompt_tokens": 1166515,
+  "recovered_runs": 2,
+  "runs_with_tool_failures": 3,
+  "success_rate": 0.6667,
+  "successful_cases": 2,
+  "total_cases": 3,
+  "wall_duration_ms": 451791.09
+}

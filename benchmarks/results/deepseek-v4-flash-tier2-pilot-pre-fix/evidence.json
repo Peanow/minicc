@@ -1,0 +1,56 @@
+{
+  "excluded_artifacts": [
+    "trace contents",
+    "agent stdout/stderr contents",
+    "SQLite memory",
+    "temporary workspaces"
+  ],
+  "exported_at": "2026-07-30T16:56:54.977730+00:00",
+  "manifest_sanitized": false,
+  "schema_version": 1,
+  "source_hashes": {
+    "manifest": "c7167d9a0c24e7e7e5c6b42134d5f8961680551f5cb1c26af26e60a2d7329143",
+    "results": "970da96c97218a39d620f430beacaee2ecc664122b012a49ff25b43fbad1a7eb",
+    "run": "8399474e4f5e0ef70750e62037a7777f60fc9ecea3cf113941897f917c022d3e",
+    "summary": "3199dc540466017c58c554eef227559b415c51369017bc01099be201763761a7"
+  },
+  "source_run": {
+    "cases": [
+      "diskcache-peek-large-file__deepseek-v4-flash__hybrid-workspace__r01",
+      "diskcache-peek-large-file__deepseek-v4-flash__hybrid-workspace__r02",
+      "diskcache-peek-large-file__deepseek-v4-flash__hybrid-workspace__r03",
+      "diskcache-peek-large-file__deepseek-v4-flash__truncate-workspace__r01",
+      "diskcache-peek-large-file__deepseek-v4-flash__truncate-workspace__r02",
+      "diskcache-peek-large-file__deepseek-v4-flash__truncate-workspace__r03",
+      "diskcache-peek-large-file__deepseek-v4-flash__summary-workspace__r01",
+      "diskcache-peek-large-file__deepseek-v4-flash__summary-workspace__r02",
+      "diskcache-peek-large-file__deepseek-v4-flash__summary-workspace__r03"
+    ],
+    "completed_at": "2026-07-30T16:42:06.639619+00:00",
+    "fixture_digests": {
+      "diskcache-peek-large-file": "dfb282983ccc84c510bd7b0c930979ade8953cb6d027d210b5634fb64be1bb31"
+    },
+    "harness_digest": "903fb5aee89b5bd5f5c1732151ceddac9652c42e57106d22f1697414fcc15043",
+    "hidden_check_digests": {
+      "diskcache-peek-large-file": {
+        "tier2/hidden/diskcache-peek-large-file.py": "b56f51e82a53dd05f602585ffc3d26858fa4f7533ee0aabed2651bbe9c6ca887"
+      }
+    },
+    "manifest": "tier2-real-repos-pilot",
+    "manifest_sha256": "c7167d9a0c24e7e7e5c6b42134d5f8961680551f5cb1c26af26e60a2d7329143",
+    "python": "3.10.20 (main, Apr  7 2026, 21:06:06) [Clang 22.1.1 ]",
+    "repetitions": 3,
+    "schema_version": 1,
+    "started_at": "2026-07-30T16:29:10.322260+00:00",
+    "status": "completed",
+    "task_provenance": {
+      "diskcache-peek-large-file": {
+        "commit": "4d3068625a3edcd2f5a1f6f104ef621f1f7ea395",
+        "issue": "https://github.com/grantjenks/python-diskcache/pull/288",
+        "license": "Apache-2.0",
+        "repository": "https://github.com/grantjenks/python-diskcache"
+      }
+    },
+    "tier": "tier2"
+  }
+}

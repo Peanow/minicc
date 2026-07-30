@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CoreCoder evaluation comparison</title>
+<style>
+:root { color-scheme:dark;--bg:#0b1020;--panel:#151c30;--line:#28324d;
+--text:#e8ecf5;--muted:#98a2b8;--good:#70d6b7;--bad:#ff8b8b }
+* { box-sizing:border-box } body { margin:0;background:var(--bg);color:var(--text);
+font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace }
+main { max-width:1280px;margin:auto;padding:36px 22px 70px }
+h1 { margin:0 0 6px;font-size:28px } .subtitle { color:var(--muted);margin-bottom:26px }
+.table-wrap { overflow:auto;background:var(--panel);border:1px solid var(--line);
+border-radius:10px;margin:12px 0 30px } table { border-collapse:collapse;width:100%;
+min-width:760px } th,td { padding:11px 13px;border-bottom:1px solid var(--line);
+text-align:right;white-space:nowrap } th:first-child,td:first-child { text-align:left }
+thead th { color:var(--muted) } tbody tr:last-child th,tbody tr:last-child td {
+border-bottom:0 } .pass { color:var(--good);font-weight:700 }
+.fail { color:var(--bad);font-weight:700 } .missing { color:var(--muted) }
+.note { color:var(--muted);border-left:3px solid var(--line);padding-left:12px }
+</style>
+</head>
+<body><main>
+<h1>CoreCoder evaluation comparison</h1>
+<div class="subtitle">9 records · 1 sources · deepseek-v4-flash-tier2-pilot-pre-fix</div>
+<h2>Profiles</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Model / strategy</th><th>Passed</th><th>Success</th>
+<th>Tokens</th><th>Wall time</th><th>Cost</th><th>Policy denials</th>
+<th>Denied risk classes</th><th>Integrity failures</th><th>Hidden pass</th>
+<th>Edit precision</th><th>Unrelated edits</th><th>Failure recovery</th>
+<th>Compactions</th></tr></thead>
+<tbody><tr><th>deepseek-v4-flash / hybrid-workspace</th><td>3/3</td><td>100.0%</td><td>1,052,070</td><td>250.98s</td><td>unknown</td><td>17</td><td>destructive: 2, shell-composition: 13, workspace-execution: 2</td><td>0</td><td>100.0%</td><td>66.7%</td><td>33.3%</td><td>100.0%</td><td>9</td></tr><tr><th>deepseek-v4-flash / summary-workspace</th><td>2/3</td><td>66.7%</td><td>792,385</td><td>277.66s</td><td>unknown</td><td>15</td><td>destructive: 3, shell-composition: 9, workspace-execution: 3</td><td>0</td><td>100.0%</td><td>44.4%</td><td>55.6%</td><td>66.7%</td><td>1</td></tr><tr><th>deepseek-v4-flash / truncate-workspace</th><td>3/3</td><td>100.0%</td><td>1,102,924</td><td>247.52s</td><td>unknown</td><td>31</td><td>destructive: 3, shell-composition: 21, unknown: 1, workspace-execution: 6</td><td>0</td><td>100.0%</td><td>50.0%</td><td>50.0%</td><td>100.0%</td><td>8</td></tr></tbody>
+</table></div>
+<h2>Task matrix</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Task</th><th>deepseek-v4-flash / hybrid-workspace</th><th>deepseek-v4-flash / summary-workspace</th><th>deepseek-v4-flash / truncate-workspace</th></tr></thead>
+<tbody><tr><th>diskcache-peek-large-file</th><td class="pass">3/3</td><td class="fail">2/3</td><td class="pass">3/3</td></tr></tbody>
+</table></div>
+<p class="note">Cost is shown as unknown unless every record in a profile has
+explicit model pricing. A comparison is evidence, not a quality claim, until
+the underlying manifests, fixture hashes, and raw results are reviewed.</p>
+</main></body></html>

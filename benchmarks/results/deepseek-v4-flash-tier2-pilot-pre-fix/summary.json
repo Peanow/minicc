@@ -1,0 +1,120 @@
+{
+  "by_model": {
+    "deepseek-v4-flash": {
+      "cases": 9,
+      "context_compactions": 18,
+      "duration_ms": 763037.07,
+      "failure_recovery_rate": 0.8889,
+      "hidden_checks_passed": 9,
+      "hidden_checks_total": 9,
+      "hidden_pass_rate": 1.0,
+      "mean_edit_precision": 0.537,
+      "mean_unrelated_file_modification_rate": 0.463,
+      "policy_denials_by_risk": {
+        "destructive": 8,
+        "shell-composition": 43,
+        "unknown": 1,
+        "workspace-execution": 11
+      },
+      "recovered_runs": 8,
+      "runs_with_tool_failures": 9,
+      "success_rate": 0.8889,
+      "successful": 8,
+      "tokens": 2947379,
+      "wall_duration_ms": 776158.93
+    }
+  },
+  "by_strategy": {
+    "hybrid-workspace": {
+      "cases": 3,
+      "context_compactions": 9,
+      "duration_ms": 246765.77,
+      "failure_recovery_rate": 1.0,
+      "hidden_checks_passed": 3,
+      "hidden_checks_total": 3,
+      "hidden_pass_rate": 1.0,
+      "mean_edit_precision": 0.6667,
+      "mean_unrelated_file_modification_rate": 0.3333,
+      "policy_denials_by_risk": {
+        "destructive": 2,
+        "shell-composition": 13,
+        "workspace-execution": 2
+      },
+      "recovered_runs": 3,
+      "runs_with_tool_failures": 3,
+      "success_rate": 1.0,
+      "successful": 3,
+      "tokens": 1052070,
+      "wall_duration_ms": 250984.32
+    },
+    "summary-workspace": {
+      "cases": 3,
+      "context_compactions": 1,
+      "duration_ms": 273341.1,
+      "failure_recovery_rate": 0.6667,
+      "hidden_checks_passed": 3,
+      "hidden_checks_total": 3,
+      "hidden_pass_rate": 1.0,
+      "mean_edit_precision": 0.4444,
+      "mean_unrelated_file_modification_rate": 0.5556,
+      "policy_denials_by_risk": {
+        "destructive": 3,
+        "shell-composition": 9,
+        "workspace-execution": 3
+      },
+      "recovered_runs": 2,
+      "runs_with_tool_failures": 3,
+      "success_rate": 0.6667,
+      "successful": 2,
+      "tokens": 792385,
+      "wall_duration_ms": 277655.43
+    },
+    "truncate-workspace": {
+      "cases": 3,
+      "context_compactions": 8,
+      "duration_ms": 242930.2,
+      "failure_recovery_rate": 1.0,
+      "hidden_checks_passed": 3,
+      "hidden_checks_total": 3,
+      "hidden_pass_rate": 1.0,
+      "mean_edit_precision": 0.5,
+      "mean_unrelated_file_modification_rate": 0.5,
+      "policy_denials_by_risk": {
+        "destructive": 3,
+        "shell-composition": 21,
+        "unknown": 1,
+        "workspace-execution": 6
+      },
+      "recovered_runs": 3,
+      "runs_with_tool_failures": 3,
+      "success_rate": 1.0,
+      "successful": 3,
+      "tokens": 1102924,
+      "wall_duration_ms": 247519.18
+    }
+  },
+  "completion_tokens": 63415,
+  "context_compactions": 18,
+  "duration_ms": 763037.07,
+  "estimated_cost_usd": null,
+  "failure_recovery_rate": 0.8889,
+  "hidden_checks_passed": 9,
+  "hidden_checks_total": 9,
+  "hidden_pass_rate": 1.0,
+  "mean_edit_precision": 0.537,
+  "mean_unrelated_file_modification_rate": 0.463,
+  "policy_denials": 63,
+  "policy_denials_by_risk": {
+    "destructive": 8,
+    "shell-composition": 43,
+    "unknown": 1,
+    "workspace-execution": 11
+  },
+  "prompt_tokens": 2883964,
+  "recovered_runs": 8,
+  "runs_with_tool_failures": 9,
+  "success_rate": 0.8889,
+  "successful_cases": 8,
+  "total_cases": 9,
+  "wall_duration_ms": 776158.93
+}

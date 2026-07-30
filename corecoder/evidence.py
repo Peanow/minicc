@@ -97,6 +97,12 @@ def _relative_artifact(root: Path, value: Any, field: str) -> Path:
 def _audit_trace(trace_path: Path, record: dict) -> dict[str, Any]:
     events = load_trace(trace_path)
     replay = replay_trace(trace_path)
+    protocol_checks = [
+        bool((event.get("data") or {}).get("protocol_valid"))
+        for event in events
+        if event.get("event") == "context_compacted"
+        and "protocol_valid" in (event.get("data") or {})
+    ]
     expected = {
         "replay_valid": replay.valid,
         "run_status": replay.status,
@@ -137,6 +143,10 @@ def _audit_trace(trace_path: Path, record: dict) -> dict[str, Any]:
         "run_id": replay.run_id,
         "event_count": replay.event_count,
         "valid": replay.valid,
+        "context_protocol_checks": len(protocol_checks),
+        "context_protocol_violations": sum(
+            not valid for valid in protocol_checks
+        ),
     }
 
 

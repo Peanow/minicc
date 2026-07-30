@@ -1,0 +1,50 @@
+{
+  "excluded_artifacts": [
+    "trace contents",
+    "agent stdout/stderr contents",
+    "SQLite memory",
+    "temporary workspaces"
+  ],
+  "exported_at": "2026-07-30T16:56:54.949167+00:00",
+  "manifest_sanitized": false,
+  "schema_version": 1,
+  "source_hashes": {
+    "manifest": "c7167d9a0c24e7e7e5c6b42134d5f8961680551f5cb1c26af26e60a2d7329143",
+    "results": "ea7d7fa69e91ac1405416147139df5e69ace49db601ba8ac8c909b7e0ab2240b",
+    "run": "d7028c34f1353c2d87d3be465bd41dd6736fe1eb9f189b8369becd6882c8f4b5",
+    "summary": "f72fa59de50251f8f14fb9035a2d384bd0834ed87f23d8a4295a382c8253e299"
+  },
+  "source_run": {
+    "cases": [
+      "diskcache-peek-large-file__deepseek-v4-flash__summary-workspace__r01",
+      "diskcache-peek-large-file__deepseek-v4-flash__summary-workspace__r02",
+      "diskcache-peek-large-file__deepseek-v4-flash__summary-workspace__r03"
+    ],
+    "completed_at": "2026-07-30T16:53:32.777467+00:00",
+    "fixture_digests": {
+      "diskcache-peek-large-file": "dfb282983ccc84c510bd7b0c930979ade8953cb6d027d210b5634fb64be1bb31"
+    },
+    "harness_digest": "91f2b7c13cd4ed8009826353098f570f5297673f26212c6ab632afbd114c8b8b",
+    "hidden_check_digests": {
+      "diskcache-peek-large-file": {
+        "tier2/hidden/diskcache-peek-large-file.py": "b56f51e82a53dd05f602585ffc3d26858fa4f7533ee0aabed2651bbe9c6ca887"
+      }
+    },
+    "manifest": "tier2-real-repos-pilot",
+    "manifest_sha256": "c7167d9a0c24e7e7e5c6b42134d5f8961680551f5cb1c26af26e60a2d7329143",
+    "python": "3.10.20 (main, Apr  7 2026, 21:06:06) [Clang 22.1.1 ]",
+    "repetitions": 3,
+    "schema_version": 1,
+    "started_at": "2026-07-30T16:46:00.929415+00:00",
+    "status": "completed",
+    "task_provenance": {
+      "diskcache-peek-large-file": {
+        "commit": "4d3068625a3edcd2f5a1f6f104ef621f1f7ea395",
+        "issue": "https://github.com/grantjenks/python-diskcache/pull/288",
+        "license": "Apache-2.0",
+        "repository": "https://github.com/grantjenks/python-diskcache"
+      }
+    },
+    "tier": "tier2"
+  }
+}
