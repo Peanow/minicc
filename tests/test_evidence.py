@@ -1,0 +1,156 @@
+"""Tests for commit-safe benchmark evidence export."""
+
+import json
+from pathlib import Path
+
+import pytest
+
+from corecoder.evidence import export_evidence
+from corecoder.trace import JsonlTraceSink
+
+
+def _build_evaluation(tmp_path):
+    evaluation = tmp_path / "evaluation"
+    case_dir = evaluation / "cases" / "case-1"
+    case_dir.mkdir(parents=True)
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    trace_path = case_dir / "trace.jsonl"
+    trace = JsonlTraceSink(trace_path, run_id="run-1")
+    trace.emit("run_started", workspace=str(workspace))
+    trace.emit("llm_started", request_fingerprint="a" * 64)
+    trace.emit(
+        "llm_finished",
+        prompt_tokens=10,
+        completion_tokens=2,
+        content="done",
+        tool_calls=[],
+    )
+    trace.emit(
+        "run_finished",
+        status="completed",
+        changed_files=[str(workspace / "app.py")],
+    )
+    trace.close()
+    stdout_path = case_dir / "agent.stdout.log"
+    stderr_path = case_dir / "agent.stderr.log"
+    stdout_path.write_text("done\n")
+    stderr_path.write_text("")
+
+    record = {
+        "case_id": "case-1",
+        "task_id": "task-1",
+        "fixture_digest": "f" * 64,
+        "model_profile": "model",
+        "model": "model-id",
+        "strategy_profile": "hybrid",
+        "context_strategy": "hybrid",
+        "permission_mode": "workspace-write",
+        "success": True,
+        "agent_exit_code": 0,
+        "replay_valid": True,
+        "run_status": "completed",
+        "prompt_tokens": 10,
+        "completion_tokens": 2,
+        "duration_ms": 1.0,
+        "wall_duration_ms": 2.0,
+        "estimated_cost_usd": None,
+        "policy_denials": 0,
+        "policy_denials_by_risk": {},
+        "protected_files_unchanged": True,
+        "changed_files": ["app.py"],
+        "checks": [{"argv": ["python", "verify.py"], "passed": True}],
+        "trace_path": str(trace_path.relative_to(evaluation)),
+        "stdout_path": str(stdout_path.relative_to(evaluation)),
+        "stderr_path": str(stderr_path.relative_to(evaluation)),
+        "error": None,
+    }
+    (evaluation / "results.jsonl").write_text(json.dumps(record) + "\n")
+    (evaluation / "summary.json").write_text(json.dumps({
+        "total_cases": 1,
+        "successful_cases": 1,
+        "success_rate": 1.0,
+        "prompt_tokens": 10,
+        "completion_tokens": 2,
+        "duration_ms": 1.0,
+        "wall_duration_ms": 2.0,
+        "estimated_cost_usd": None,
+        "policy_denials": 0,
+        "policy_denials_by_risk": {},
+        "by_model": {},
+        "by_strategy": {},
+    }))
+    (evaluation / "run.json").write_text(json.dumps({
+        "schema_version": 1,
+        "manifest": "test",
+        "status": "completed",
+        "cases": ["case-1"],
+    }))
+    (evaluation / "manifest.snapshot.json").write_text(json.dumps({
+        "schema_version": 1,
+        "name": "test",
+    }))
+    return evaluation
+
+
+def test_export_evidence_audits_and_excludes_runtime_artifacts(tmp_path):
+    evaluation = _build_evaluation(tmp_path)
+    output = tmp_path / "evidence"
+
+    result = export_evidence(evaluation, output)
+
+    assert result.case_count == 1
+    assert result.successful_cases == 1
+    assert (output / "results.jsonl").is_file()
+    assert (output / "summary.json").is_file()
+    assert (output / "manifest.json").is_file()
+    assert (output / "evidence.json").is_file()
+    assert (output / "report.html").is_file()
+    assert not list(output.rglob("trace.jsonl"))
+    exported = json.loads((output / "results.jsonl").read_text())
+    assert "trace_path" not in exported
+    assert len(exported["artifact_hashes"]["trace"]["sha256"]) == 64
+
+
+def test_export_evidence_rejects_sensitive_result(tmp_path):
+    evaluation = _build_evaluation(tmp_path)
+    path = evaluation / "results.jsonl"
+    record = json.loads(path.read_text())
+    record["error"] = "api_key=secret-value"
+    path.write_text(json.dumps(record) + "\n")
+
+    with pytest.raises(ValueError, match="credential-like"):
+        export_evidence(evaluation, tmp_path / "evidence")
+
+
+def test_export_evidence_rejects_tampered_summary(tmp_path):
+    evaluation = _build_evaluation(tmp_path)
+    path = evaluation / "summary.json"
+    summary = json.loads(path.read_text())
+    summary["successful_cases"] = 0
+    path.write_text(json.dumps(summary))
+
+    with pytest.raises(ValueError, match="summary/results mismatch"):
+        export_evidence(evaluation, tmp_path / "evidence")
+
+
+def test_evidence_cli(tmp_path, monkeypatch, capsys):
+    from corecoder.cli import main
+
+    evaluation = _build_evaluation(tmp_path)
+    output = tmp_path / "cli-evidence"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "corecoder",
+            "evidence",
+            str(evaluation),
+            "-o",
+            str(output),
+        ],
+    )
+
+    main()
+
+    assert '"case_count": 1' in capsys.readouterr().out
+    assert (output / "README.md").is_file()

@@ -147,6 +147,13 @@ corecoder compare benchmarks/results/run-a benchmarks/results/run-b \
   -o .tmp/comparison.html
 ```
 
+把完整运行转换为可提交证据（不会复制 Trace 和日志）：
+
+```bash
+corecoder evidence .tmp/local-v1-run \
+  -o benchmarks/results/local-v1-reviewed
+```
+
 ## Workspace 验证目录
 
 `workspace/` 是独立的功能验证沙盒，CoreCoder 在此操作不会影响项目源码。

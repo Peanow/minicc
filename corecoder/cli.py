@@ -31,6 +31,7 @@ from .replay import generate_html_report, replay_trace
 from .eval import load_manifest, plan_cases, run_evaluation
 from .runtime_replay import runtime_replay
 from .comparison import generate_comparison_report
+from .evidence import export_evidence
 from . import __version__
 
 console = Console()
@@ -102,6 +103,12 @@ def _parse_args():
     )
     compare_parser.add_argument("results", nargs="+")
     compare_parser.add_argument("-o", "--output", required=True)
+    evidence_parser = subcommands.add_parser(
+        "evidence",
+        help="Audit an evaluation and export commit-safe evidence",
+    )
+    evidence_parser.add_argument("evaluation_dir")
+    evidence_parser.add_argument("-o", "--output", required=True)
     p.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
     return p.parse_args()
 
@@ -198,6 +205,14 @@ def main():
             f"[green]Comparison written:[/green] {os.path.abspath(args.output)} "
             f"({summary.record_count} records)"
         )
+        return
+    if args.command == "evidence":
+        try:
+            exported = export_evidence(args.evaluation_dir, args.output)
+        except (OSError, ValueError) as exc:
+            console.print(f"[red]Evidence export failed:[/red] {exc}")
+            sys.exit(2)
+        print(json.dumps(exported.to_dict(), ensure_ascii=False, indent=2))
         return
 
     config = Config.from_env()

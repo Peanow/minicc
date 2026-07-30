@@ -14,6 +14,7 @@ from corecoder.replay import generate_html_report, replay_trace
 from corecoder.eval import aggregate_records, load_manifest, plan_cases, run_evaluation
 from corecoder.runtime_replay import runtime_replay
 from corecoder.comparison import generate_comparison_report
+from corecoder.evidence import export_evidence
 
 __all__ = [
     "Agent", "LLM", "Config", "ALL_TOOLS", "ToolRegistry",
@@ -24,4 +25,5 @@ __all__ = [
     "aggregate_records", "load_manifest", "plan_cases", "run_evaluation",
     "runtime_replay",
     "generate_comparison_report",
+    "export_evidence",
 ]

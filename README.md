@@ -109,6 +109,19 @@ The report groups success, tokens, wall time, optional cost, policy denials,
 and verifier-integrity failures by model/strategy, then builds a per-task
 outcome matrix.
 
+Before committing benchmark evidence, audit the source traces and export only
+portable metrics and hashes:
+
+```bash
+corecoder evidence .tmp/local-v1-run \
+  -o benchmarks/results/local-v1-reviewed
+```
+
+The exporter verifies trace lifecycles against every result, checks aggregate
+totals, rejects credential-like values, and retains SHA-256 hashes. Trace
+bodies, agent logs, SQLite memory, and temporary workspaces are deliberately
+excluded in accordance with the repository security rules.
+
 ---
 
 ```

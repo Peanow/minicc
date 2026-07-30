@@ -189,6 +189,17 @@ corecoder compare benchmarks/results/run-a benchmarks/results/run-b \
 报告按模型/策略汇总成功率、token、墙钟时间、可选成本、策略拒绝和校验器完整性，
 并生成逐任务结果矩阵。
 
+提交评测证据前，先审计原始 Trace 并只导出可移植指标与哈希：
+
+```bash
+corecoder evidence .tmp/local-v1-run \
+  -o benchmarks/results/local-v1-reviewed
+```
+
+导出器会逐 case 对照 Trace 生命周期和结果指标、检查汇总、拒绝疑似凭证内容，并
+保留 SHA-256。Trace 正文、Agent 日志、SQLite Memory 和临时工作区不会进入证据
+目录，符合仓库的安全提交规则。
+
 ## 架构
 
 整个项目一目了然：

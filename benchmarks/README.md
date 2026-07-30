@@ -83,6 +83,29 @@ corecoder compare results/run-a results/run-b -o ../.tmp/comparison.html
 The HTML is self-contained and includes a profile summary plus a task/profile
 matrix. Unknown or partial costs remain visibly unknown.
 
+## Commit-safe evidence
+
+Evaluation directories intentionally contain artifacts that must not be
+committed. Audit a completed run and export a reviewed evidence bundle:
+
+```bash
+corecoder evidence ../.tmp/local-v1-run \
+  -o results/local-v1-reviewed
+```
+
+The exporter:
+
+1. validates run and summary consistency;
+2. replays every Trace lifecycle and cross-checks token, status, and changed
+   file metrics;
+3. rejects credential-like or oversized values;
+4. replaces Trace/log paths with SHA-256 hashes and lifecycle metadata;
+5. emits portable `results.jsonl`, `summary.json`, `manifest.json`,
+   `evidence.json`, and `report.html`.
+
+Trace bodies, stdout/stderr contents, SQLite databases, and temporary
+workspaces remain in the ignored source directory and are never copied.
+
 ## Integrity rules
 
 Every bundled task declares `protected_paths`, currently its `verify.py`.
