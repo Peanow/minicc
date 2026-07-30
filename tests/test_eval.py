@@ -58,8 +58,8 @@ def test_bundled_manifest_expands_enabled_matrix():
     cases = plan_cases(manifest)
 
     assert manifest.name == "local-v1"
-    assert len(manifest.tasks) == 6
-    assert len(cases) == 12
+    assert len(manifest.tasks) == 12
+    assert len(cases) == 24
     assert cases[0].id == (
         "python-inclusive-range__deepseek-v4-flash__hybrid-workspace"
     )
@@ -224,6 +224,12 @@ def test_run_evaluation_writes_reproducibility_metadata(tmp_path, monkeypatch):
         "python-safe-path",
         "python-multifile-slug",
         "python-scoped-instructions",
+        "python-retry-policy",
+        "python-deep-merge",
+        "python-topological-order",
+        "python-secret-redaction",
+        "python-lazy-batches",
+        "python-cursor-pagination",
     ],
 )
 def test_benchmark_fixture_starts_unsolved(task):

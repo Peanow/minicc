@@ -8,7 +8,12 @@ from corecoder.agent import Agent
 from corecoder.llm import LLMResponse, ToolCall
 from corecoder.tools import ToolRegistry
 from corecoder.tools.base import Tool
-from corecoder.trace import InMemoryTraceSink, JsonlTraceSink, redact
+from corecoder.trace import (
+    InMemoryTraceSink,
+    JsonlTraceSink,
+    redact,
+    request_fingerprint,
+)
 from corecoder.context import create_context_strategy
 
 
@@ -65,6 +70,10 @@ def test_agent_executes_its_private_tool_registry():
     run_started = trace.events[0]
     assert run_started["data"]["context_strategy"] == "hybrid"
     assert run_started["data"]["token_counter"] == "approx"
+    assert run_started["data"]["permission_mode"] == "workspace-write"
+    assert run_started["data"]["workspace"]
+    llm_started = next(event for event in trace.events if event["event"] == "llm_started")
+    assert len(llm_started["data"]["request_fingerprint"]) == 64
     events = [event["event"] for event in trace.events]
     assert events == [
         "run_started",
@@ -99,6 +108,19 @@ def test_jsonl_trace_is_append_only_and_redacted(tmp_path):
     assert "secret-token-value" not in serialized
     assert "sk-1234567890abcdefghijkl" not in serialized
     assert "REDACTED" in serialized
+
+
+def test_request_fingerprint_is_stable_across_workspace_paths(tmp_path):
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    messages_first = [{"role": "user", "content": f"Read {first}/app.py"}]
+    messages_second = [{"role": "user", "content": f"Read {second}/app.py"}]
+
+    assert request_fingerprint(messages_first, [], first) == request_fingerprint(
+        messages_second,
+        [],
+        second,
+    )
 
 
 def test_redact_nested_values():

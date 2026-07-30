@@ -107,6 +107,17 @@ corecoder report .tmp/sample-run.jsonl -o .tmp/sample-run.html
 这两个命令不需要 API Key。Replay 不执行 Trace 中记录的工具，因此可以安全地用于
 完整性检查和指标汇总。
 
+如果 Trace 来自当前版本，还可以在干净 fixture 副本中做可执行回放：
+
+```bash
+corecoder runtime-replay .tmp/sample-run.jsonl \
+  --fixture benchmarks/tasks/python-inclusive-range \
+  -o .tmp/runtime-replay
+```
+
+Runtime Replay 会执行录制的文件工具，因此必须提供原始未解决 fixture；输出始终写到
+新的目录。它不调用模型 API，并拒绝 full-access、已执行 Bash/子 Agent 的录制。
+
 ## 评测任务
 
 先检查将要执行的矩阵：
@@ -126,6 +137,13 @@ corecoder eval benchmarks/local-v1.json \
 
 运行结果会保留 manifest/fixture 哈希、逐 case Trace、标准输出/错误、校验结果和
 汇总指标。API Key 仅按 manifest 的 `api_key_env` 从环境读取。
+
+对比两个或多个结果目录：
+
+```bash
+corecoder compare benchmarks/results/run-a benchmarks/results/run-b \
+  -o .tmp/comparison.html
+```
 
 ## Workspace 验证目录
 

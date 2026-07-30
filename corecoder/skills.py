@@ -113,7 +113,7 @@ def load_skill(path: Path) -> Skill:
 # Discovery
 # ---------------------------------------------------------------------------
 
-def _find_skills_dir(cwd: Path) -> Path | None:
+def _find_skills_dir(cwd: Path, stop_at: Path | None = None) -> Path | None:
     """Walk from *cwd* upward to home, return the first ``.corecoder/skills/``."""
     home = Path.home()
     cur = cwd.resolve()
@@ -121,20 +121,31 @@ def _find_skills_dir(cwd: Path) -> Path | None:
         candidate = cur / _SKILLS_DIR_NAME / _SKILLS_SUBDIR
         if candidate.is_dir():
             return candidate
-        if cur == home or cur == cur.parent:
+        if cur == stop_at or cur == home or cur == cur.parent:
             break
         cur = cur.parent
     return None
 
 
-def discover_skills(cwd: str | Path | None = None) -> list[Skill]:
+def discover_skills(
+    cwd: str | Path | None = None,
+    project_root: str | Path | None = None,
+) -> list[Skill]:
     """Discover and load all project-level skills.
 
     Standard skills are preferred. If none exist, load the nearest legacy
     ``.corecoder/skills`` directory for backward compatibility.
     """
     start = (Path(cwd) if cwd else Path.cwd()).expanduser().resolve()
-    root = find_project_root(start)
+    root = (
+        Path(project_root).expanduser().resolve()
+        if project_root is not None
+        else find_project_root(start)
+    )
+    try:
+        start.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("cwd must be inside project_root") from exc
     directories = [root]
     current = root
     if start != root:
@@ -157,7 +168,10 @@ def discover_skills(cwd: str | Path | None = None) -> list[Skill]:
     if by_name:
         return sorted(by_name.values(), key=lambda skill: skill.name.lower())
 
-    legacy_dir = _find_skills_dir(start)
+    legacy_dir = _find_skills_dir(
+        start,
+        stop_at=root if project_root is not None else None,
+    )
     if legacy_dir is None:
         return []
     for md_file in sorted(legacy_dir.glob("*.md")):

@@ -55,6 +55,21 @@ Replay is side-effect free: it neither calls a model nor executes a tool. It
 validates run, LLM, tool, and result lifecycles and reconstructs aggregate
 metrics. The report is a self-contained HTML timeline with escaped tool output.
 
+For a stronger reproducibility check, traces now include a canonical fingerprint
+of every model request. Runtime Replay feeds the recorded responses back through
+a fresh Agent and re-executes supported file tools inside a copied fixture:
+
+```bash
+corecoder runtime-replay benchmarks/results/run/cases/case/trace.jsonl \
+  --fixture benchmarks/tasks/python-inclusive-range \
+  -o .tmp/runtime-replay
+```
+
+Runtime Replay does not call an API. It compares request fingerprints, tool
+results, the final answer, and changed files. For safety it refuses full-access
+recordings and recordings that actually executed Bash or a sub-agent; project
+shell hooks are disabled during replay.
+
 ## Reproducible evaluations
 
 ```bash
@@ -67,11 +82,24 @@ corecoder eval benchmarks/local-v1.json \
   -o benchmarks/results/local-v1-smoke
 ```
 
-The first benchmark batch contains six deliberately unsolved fixtures across
-bug fixing, parsing, state, path security, multi-file editing, and scoped
-instructions. Verifiers are hash-protected so an agent cannot pass by rewriting
-its checks. See [`benchmarks/README.md`](benchmarks/README.md) for the evidence
-format and metric policy.
+The benchmark currently contains twelve deliberately unsolved fixtures across
+bug fixing, parsing, state, path security, multi-file editing, scoped
+instructions, retries, configuration merging, dependency ordering, redaction,
+lazy batching, and cursor pagination. Verifiers are hash-protected so an agent
+cannot pass by rewriting its checks. See
+[`benchmarks/README.md`](benchmarks/README.md) for the evidence format and
+metric policy.
+
+Compare one or more result directories in a self-contained report:
+
+```bash
+corecoder compare benchmarks/results/run-a benchmarks/results/run-b \
+  -o .tmp/comparison.html
+```
+
+The report groups success, tokens, wall time, optional cost, policy denials,
+and verifier-integrity failures by model/strategy, then builds a per-task
+outcome matrix.
 
 ---
 

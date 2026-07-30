@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 import threading
 import time
@@ -46,6 +47,41 @@ def redact(value: Any) -> Any:
     text = _SECRET_PATTERNS[1].sub(r"\1[REDACTED_TOKEN]", text)
     text = _SECRET_PATTERNS[2].sub(r"\1\2[REDACTED]", text)
     return text
+
+
+def _canonicalize_workspace(value: Any, workspace: str | Path) -> Any:
+    """Replace workspace-specific absolute paths before stable hashing."""
+    root = str(Path(workspace).expanduser().resolve())
+    if isinstance(value, dict):
+        return {
+            str(key): _canonicalize_workspace(item, root)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_canonicalize_workspace(item, root) for item in value]
+    if isinstance(value, str):
+        return value.replace(root, "${WORKSPACE}")
+    return value
+
+
+def request_fingerprint(
+    messages: list[dict],
+    tools: list[dict],
+    workspace: str | Path,
+) -> str:
+    """Hash a canonical model request without persisting its full contents."""
+    payload = _canonicalize_workspace(
+        {"messages": messages, "tools": tools},
+        workspace,
+    )
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 class TraceSink:

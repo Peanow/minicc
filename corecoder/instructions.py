@@ -48,6 +48,7 @@ def _path_chain(root: Path, cwd: Path) -> list[Path]:
 def load_project_instructions(
     cwd: str | Path | None = None,
     max_bytes: int = DEFAULT_MAX_BYTES,
+    project_root: str | Path | None = None,
 ) -> list[InstructionSource]:
     """Load one instruction file per directory from project root to cwd.
 
@@ -56,7 +57,15 @@ def load_project_instructions(
     used only at the project root when neither AGENTS file exists there.
     """
     current = (Path(cwd) if cwd else Path.cwd()).expanduser().resolve()
-    root = find_project_root(current)
+    root = (
+        Path(project_root).expanduser().resolve()
+        if project_root is not None
+        else find_project_root(current)
+    )
+    try:
+        current.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("cwd must be inside project_root") from exc
     sources: list[InstructionSource] = []
     used_bytes = 0
 

@@ -157,6 +157,16 @@ class TestDiscoverSkills:
         assert len(skills) == 1
         assert skills[0].content == "Child"
 
+    def test_explicit_root_does_not_inherit_parent_legacy_skills(self, tmp_path):
+        parent = tmp_path / "parent"
+        workspace = parent / "workspace"
+        legacy = parent / ".corecoder" / "skills"
+        workspace.mkdir(parents=True)
+        legacy.mkdir(parents=True)
+        (legacy / "parent.md").write_text("parent skill")
+
+        assert discover_skills(workspace, project_root=workspace) == []
+
 
 # ---------------------------------------------------------------------------
 # format_skills_directory (lightweight — only name + description)

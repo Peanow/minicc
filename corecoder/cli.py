@@ -29,6 +29,8 @@ from .context import create_context_strategy
 from .tokenizer import create_token_counter
 from .replay import generate_html_report, replay_trace
 from .eval import load_manifest, plan_cases, run_evaluation
+from .runtime_replay import runtime_replay
+from .comparison import generate_comparison_report
 from . import __version__
 
 console = Console()
@@ -87,6 +89,19 @@ def _parse_args():
         action="store_true",
         help="Validate and print the case plan without calling a model",
     )
+    runtime_replay_parser = subcommands.add_parser(
+        "runtime-replay",
+        help="Re-execute recorded model decisions in a fresh fixture workspace",
+    )
+    runtime_replay_parser.add_argument("trace_path")
+    runtime_replay_parser.add_argument("--fixture", required=True)
+    runtime_replay_parser.add_argument("-o", "--output", required=True)
+    compare_parser = subcommands.add_parser(
+        "compare",
+        help="Generate a multi-model and multi-strategy HTML comparison",
+    )
+    compare_parser.add_argument("results", nargs="+")
+    compare_parser.add_argument("-o", "--output", required=True)
     p.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
     return p.parse_args()
 
@@ -158,6 +173,31 @@ def main():
             f"{summary.successful_cases}/{summary.total_cases} passed"
         )
         console.print(f"[dim]Evidence: {os.path.abspath(output)}[/dim]")
+        return
+    if args.command == "runtime-replay":
+        try:
+            result = runtime_replay(
+                args.trace_path,
+                args.fixture,
+                args.output,
+            )
+        except (OSError, ValueError) as exc:
+            console.print(f"[red]Runtime replay failed:[/red] {exc}")
+            sys.exit(2)
+        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+        if not result.valid:
+            sys.exit(1)
+        return
+    if args.command == "compare":
+        try:
+            summary = generate_comparison_report(args.results, args.output)
+        except (OSError, ValueError) as exc:
+            console.print(f"[red]Comparison failed:[/red] {exc}")
+            sys.exit(2)
+        console.print(
+            f"[green]Comparison written:[/green] {os.path.abspath(args.output)} "
+            f"({summary.record_count} records)"
+        )
         return
 
     config = Config.from_env()

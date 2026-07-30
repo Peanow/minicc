@@ -111,6 +111,78 @@
       ],
       "protected_paths": ["verify.py"],
       "tags": ["python", "instructions", "aggregation"]
+    },
+    {
+      "id": "python-retry-policy",
+      "fixture": "tasks/python-retry-policy",
+      "prompt": "Implement run_with_retry in retry.py without changing its signature. Attempt at most max_attempts times, retry only exceptions accepted by should_retry, call sleeper between retries but never after the final attempt, and re-raise the original exception when stopping. Reject max_attempts below 1 with ValueError. Run verify.py.",
+      "checks": [
+        {
+          "argv": ["python", "verify.py"]
+        }
+      ],
+      "protected_paths": ["verify.py"],
+      "tags": ["python", "reliability", "retry"]
+    },
+    {
+      "id": "python-deep-merge",
+      "fixture": "tasks/python-deep-merge",
+      "prompt": "Implement deep_merge in merge.py. Recursively merge dictionaries, replace non-dictionary values including lists, preserve keys from both sides, and do not mutate either input. Keep the signature and use only the standard library. Run verify.py.",
+      "checks": [
+        {
+          "argv": ["python", "verify.py"]
+        }
+      ],
+      "protected_paths": ["verify.py"],
+      "tags": ["python", "configuration", "immutability"]
+    },
+    {
+      "id": "python-topological-order",
+      "fixture": "tasks/python-topological-order",
+      "prompt": "Implement dependency_order in graph.py. Return a deterministic topological order using lexical order when multiple nodes are ready, include dependencies that appear only in value lists, and raise ValueError containing 'cycle' for cyclic graphs. Do not mutate the input. Run verify.py.",
+      "checks": [
+        {
+          "argv": ["python", "verify.py"]
+        }
+      ],
+      "protected_paths": ["verify.py"],
+      "tags": ["python", "algorithm", "dependencies"]
+    },
+    {
+      "id": "python-secret-redaction",
+      "fixture": "tasks/python-secret-redaction",
+      "prompt": "Complete redact_secrets in redaction.py. Replace values in Bearer authorization tokens and api_key/token/password key-value pairs with [REDACTED], case-insensitively, while preserving surrounding text and avoiding changes to ordinary words. Do not add dependencies. Run verify.py.",
+      "checks": [
+        {
+          "argv": ["python", "verify.py"]
+        }
+      ],
+      "protected_paths": ["verify.py"],
+      "tags": ["python", "security", "observability"]
+    },
+    {
+      "id": "python-lazy-batches",
+      "fixture": "tasks/python-lazy-batches",
+      "prompt": "Implement iter_batches in batches.py as a lazy iterator over any iterable. Preserve order, emit a final partial batch, consume the source only as needed, and raise ValueError for size below 1. Keep the signature and run verify.py.",
+      "checks": [
+        {
+          "argv": ["python", "verify.py"]
+        }
+      ],
+      "protected_paths": ["verify.py"],
+      "tags": ["python", "iterators", "data-processing"]
+    },
+    {
+      "id": "python-cursor-pagination",
+      "fixture": "tasks/python-cursor-pagination",
+      "prompt": "Implement collect_pages in pagination.py. Call fetch_page(cursor) starting with None, concatenate items in order, stop when next_cursor is None, and raise ValueError containing 'cursor' if a cursor repeats. Keep the signature and run verify.py.",
+      "checks": [
+        {
+          "argv": ["python", "verify.py"]
+        }
+      ],
+      "protected_paths": ["verify.py"],
+      "tags": ["python", "api", "pagination"]
     }
   ]
 }

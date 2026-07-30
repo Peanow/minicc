@@ -52,3 +52,17 @@ def test_find_project_root_falls_back_to_cwd(tmp_path):
     child = tmp_path / "child"
     child.mkdir()
     assert find_project_root(child) == child
+
+
+def test_explicit_project_root_does_not_inherit_parent_instructions(tmp_path):
+    parent = tmp_path / "parent"
+    workspace = parent / "workspace"
+    workspace.mkdir(parents=True)
+    (parent / "AGENTS.md").write_text("parent-only")
+
+    sources = load_project_instructions(
+        workspace,
+        project_root=workspace,
+    )
+
+    assert sources == []

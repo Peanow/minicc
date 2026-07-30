@@ -12,6 +12,8 @@ from corecoder.context import create_context_strategy
 from corecoder.tokenizer import create_token_counter
 from corecoder.replay import generate_html_report, replay_trace
 from corecoder.eval import aggregate_records, load_manifest, plan_cases, run_evaluation
+from corecoder.runtime_replay import runtime_replay
+from corecoder.comparison import generate_comparison_report
 
 __all__ = [
     "Agent", "LLM", "Config", "ALL_TOOLS", "ToolRegistry",
@@ -20,4 +22,6 @@ __all__ = [
     "create_context_strategy", "create_token_counter",
     "generate_html_report", "replay_trace",
     "aggregate_records", "load_manifest", "plan_cases", "run_evaluation",
+    "runtime_replay",
+    "generate_comparison_report",
 ]

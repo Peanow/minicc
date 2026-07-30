@@ -30,7 +30,7 @@ from .memory import (
     format_memory_context, get_project_name,
 )
 from .embedding import EmbeddingService
-from .trace import NullTraceSink, RunResult, TraceSink
+from .trace import NullTraceSink, RunResult, TraceSink, request_fingerprint
 from .instructions import format_project_instructions, load_project_instructions
 from .policy import Decision, ExecutionPolicy
 
@@ -242,6 +242,9 @@ class Agent:
             } for source in self.instruction_sources],
             context_strategy=self.context.strategy_name,
             token_counter=self.context.token_counter.name,
+            max_context_tokens=self.context.max_tokens,
+            workspace=str(self.policy.workspace),
+            permission_mode=self.policy.mode.value,
         )
         self.messages.append({"role": "user", "content": user_input})
 
@@ -252,14 +255,21 @@ class Agent:
 
         for round_index in range(self.max_rounds):
             llm_started = time.perf_counter()
+            full_messages = self._full_messages()
+            tool_schemas = self._tool_schemas()
             self.trace.emit(
                 "llm_started",
                 round=round_index,
                 message_count=len(self.messages),
+                request_fingerprint=request_fingerprint(
+                    full_messages,
+                    tool_schemas,
+                    self.policy.workspace,
+                ),
             )
             resp = self.llm.chat(
-                messages=self._full_messages(),
-                tools=self._tool_schemas(),
+                messages=full_messages,
+                tools=tool_schemas,
                 on_token=on_token,
             )
             self.trace.emit(

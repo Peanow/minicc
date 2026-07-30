@@ -144,6 +144,19 @@ Replay 不调用模型、也不重新执行工具，只校验 LLM/工具/Run 生
 重建调用数、token、耗时、状态和修改文件摘要。HTML 报告是无外部资源的单文件，
 可以直接用于调试或项目演示；工具输出会经过 HTML 转义。
 
+Trace 还会为每轮模型请求记录规范化指纹。Runtime Replay 不调用 API，而是把已录制
+响应重新送入一个新的 Agent，在复制出的 fixture 中执行受支持的文件工具：
+
+```bash
+corecoder runtime-replay benchmarks/results/run/cases/case/trace.jsonl \
+  --fixture benchmarks/tasks/python-inclusive-range \
+  -o .tmp/runtime-replay
+```
+
+回放会比较请求指纹、工具结果、最终回答和修改文件。出于安全边界，它拒绝
+`full-access` 录制，以及实际执行过 Bash 或子 Agent 的录制；回放期间也不会执行
+项目 Shell Hook。
+
 ## 可复现评测
 
 ```bash
@@ -156,10 +169,20 @@ corecoder eval benchmarks/local-v1.json \
   -o benchmarks/results/local-v1-smoke
 ```
 
-首批包含 6 个刻意保持未解决状态的本地任务，覆盖边界修复、解析、状态、路径安全、
-多文件修改和分层指令。评测器会在运行前后校验 `verify.py` 哈希，避免 Agent 通过
-篡改测试“刷成功率”。证据目录格式和指标口径见
+当前包含 12 个刻意保持未解决状态的本地任务，覆盖边界修复、解析、状态、路径安全、
+多文件修改、分层指令、重试、配置合并、依赖排序、脱敏、批处理和游标分页。评测器
+会在运行前后校验 `verify.py` 哈希，避免 Agent 通过篡改测试“刷成功率”。证据目录格式和指标口径见
 [`benchmarks/README.md`](benchmarks/README.md)。
+
+多个结果目录可以生成单文件对比报告：
+
+```bash
+corecoder compare benchmarks/results/run-a benchmarks/results/run-b \
+  -o .tmp/comparison.html
+```
+
+报告按模型/策略汇总成功率、token、墙钟时间、可选成本、策略拒绝和校验器完整性，
+并生成逐任务结果矩阵。
 
 ## 架构
 

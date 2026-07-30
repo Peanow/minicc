@@ -20,7 +20,7 @@ corecoder eval benchmarks/local-v1.json --dry-run \
   --task python-safe-path --strategy hybrid-workspace
 ```
 
-`local-v1.json` currently contains six deliberately unsolved local tasks and two
+`local-v1.json` currently contains twelve deliberately unsolved local tasks and two
 enabled strategy profiles. The comparison model and summary strategy are
 disabled until their connection and cost settings are supplied explicitly.
 
@@ -56,6 +56,32 @@ cases/<case-id>/
 
 The runner refuses to append to an existing `results.jsonl`, preventing
 accidental mixing of separate experiments.
+
+## Replay and comparison
+
+New traces contain a workspace-normalized SHA-256 fingerprint for each model
+request. A recorded case can therefore drive the Agent Runtime without another
+model call:
+
+```bash
+corecoder runtime-replay path/to/trace.jsonl \
+  --fixture tasks/python-inclusive-range \
+  -o ../.tmp/runtime-replay
+```
+
+The command copies the fixture, replays model responses, re-executes supported
+file tools, and compares request fingerprints and tool results. It refuses
+full-access recordings and recordings that actually executed Bash or a
+sub-agent. Project shell hooks are disabled during replay.
+
+Generate an offline comparison from one or more evidence directories:
+
+```bash
+corecoder compare results/run-a results/run-b -o ../.tmp/comparison.html
+```
+
+The HTML is self-contained and includes a profile summary plus a task/profile
+matrix. Unknown or partial costs remain visibly unknown.
 
 ## Integrity rules
 
