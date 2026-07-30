@@ -11,6 +11,7 @@ from corecoder.context import (
     TruncateContextStrategy,
     create_context_strategy,
     estimate_tokens,
+    tool_protocol_valid,
 )
 from corecoder.llm import LLMResponse
 from corecoder.tokenizer import ApproxTokenCounter, create_token_counter
@@ -35,14 +36,28 @@ class SummaryLLM:
 
 
 def _long_tool_messages(count=12):
-    return [
-        {
-            "role": "tool",
-            "tool_call_id": f"tool-{index}",
-            "content": "\n".join(f"line {line} {'x' * 80}" for line in range(20)),
-        }
-        for index in range(count)
-    ]
+    messages = []
+    for index in range(count):
+        tool_call_id = f"tool-{index}"
+        messages.extend([
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [{
+                    "id": tool_call_id,
+                    "type": "function",
+                    "function": {"name": "read_file", "arguments": "{}"},
+                }],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "content": "\n".join(
+                    f"line {line} {'x' * 80}" for line in range(20)
+                ),
+            },
+        ])
+    return messages
 
 
 def test_approx_counter_handles_messages_and_tool_calls():
@@ -137,6 +152,43 @@ def test_summary_strategy_records_summary_operation():
     assert "summary" in strategy.last_operations
     assert llm.calls >= 1
     assert any("Context compressed" in str(message.get("content")) for message in messages)
+
+
+def test_summary_keeps_tool_call_and_responses_in_same_partition():
+    messages = [
+        {"role": "user", "content": f"old request {index}" + "x" * 100}
+        for index in range(6)
+    ]
+    messages.extend([
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "call-a", "type": "function", "function": {}},
+                {"id": "call-b", "type": "function", "function": {}},
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call-a", "content": "a" * 300},
+        {"role": "tool", "tool_call_id": "call-b", "content": "b" * 300},
+    ])
+    messages.extend([
+        {"role": "user", "content": f"recent request {index}" + "y" * 100}
+        for index in range(6)
+    ])
+    strategy = SummaryContextStrategy(
+        max_tokens=1800,
+        token_counter=CharacterCounter(),
+    )
+
+    assert tool_protocol_valid(messages)
+    assert strategy.maybe_compress(messages, SummaryLLM())
+    assert tool_protocol_valid(messages)
+    tool_call_index = next(
+        index for index, message in enumerate(messages)
+        if message.get("tool_calls")
+    )
+    assert messages[tool_call_index + 1]["tool_call_id"] == "call-a"
+    assert messages[tool_call_index + 2]["tool_call_id"] == "call-b"
 
 
 def test_hybrid_strategy_reports_operations():

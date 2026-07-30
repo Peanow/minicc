@@ -33,6 +33,31 @@ def estimate_tokens(
     return (counter or ApproxTokenCounter()).count_messages(messages)
 
 
+def tool_protocol_valid(messages: list[dict]) -> bool:
+    """Return whether tool responses follow their assistant tool-call message."""
+    pending: set[str] = set()
+    for message in messages:
+        role = message.get("role")
+        if pending:
+            if role != "tool":
+                return False
+            tool_call_id = str(message.get("tool_call_id") or "")
+            if tool_call_id not in pending:
+                return False
+            pending.remove(tool_call_id)
+            continue
+        if role == "tool":
+            return False
+        if role == "assistant" and message.get("tool_calls"):
+            pending = {
+                str(call.get("id") or "")
+                for call in message["tool_calls"]
+            }
+            if "" in pending:
+                return False
+    return not pending
+
+
 class ContextManager:
     strategy_name = "hybrid"
 
@@ -77,9 +102,9 @@ class ContextManager:
 
         # Layer 3: hard collapse - last resort
         if current > self._collapse_at and len(messages) > 4:
-            self._hard_collapse(messages, llm)
-            compressed = True
-            self.last_operations.append("hard_collapse")
+            if self._hard_collapse(messages, llm):
+                compressed = True
+                self.last_operations.append("hard_collapse")
 
         return compressed
 
@@ -119,8 +144,11 @@ class ContextManager:
         if len(messages) <= keep_recent:
             return False
 
-        old = messages[:-keep_recent]
-        tail = messages[-keep_recent:]
+        tail_start = self._protocol_safe_tail_start(messages, keep_recent)
+        if tail_start == 0:
+            return False
+        old = messages[:tail_start]
+        tail = messages[tail_start:]
 
         summary = self._get_summary(old, llm)
 
@@ -136,10 +164,18 @@ class ContextManager:
         messages.extend(tail)
         return True
 
-    def _hard_collapse(self, messages: list[dict], llm: LLM | None):
+    def _hard_collapse(
+        self,
+        messages: list[dict],
+        llm: LLM | None,
+    ) -> bool:
         """Layer 3: Emergency compression. Keep only last 4 messages + summary."""
-        tail = messages[-4:] if len(messages) > 4 else messages[-2:]
-        summary = self._get_summary(messages[:-len(tail)], llm)
+        keep_recent = 4 if len(messages) > 4 else 2
+        tail_start = self._protocol_safe_tail_start(messages, keep_recent)
+        if tail_start == 0:
+            return False
+        tail = messages[tail_start:]
+        summary = self._get_summary(messages[:tail_start], llm)
 
         messages.clear()
         messages.append({
@@ -151,6 +187,15 @@ class ContextManager:
             "content": "Context restored. Continuing from where we left off.",
         })
         messages.extend(tail)
+        return True
+
+    @staticmethod
+    def _protocol_safe_tail_start(messages: list[dict], keep_recent: int) -> int:
+        """Keep assistant tool calls and their tool responses in one partition."""
+        start = max(0, len(messages) - keep_recent)
+        while start > 0 and messages[start].get("role") == "tool":
+            start -= 1
+        return start
 
     def _get_summary(self, messages: list[dict], llm: LLM | None) -> str:
         """Generate summary via LLM or fallback to extraction."""
@@ -236,9 +281,9 @@ class TruncateContextStrategy(ContextManager):
             self.last_operations.append("tool_snip")
             current = self.count_messages(messages) + fixed_tokens
         if current > self._collapse_at and len(messages) > 4:
-            self._hard_collapse(messages, None)
-            compressed = True
-            self.last_operations.append("deterministic_collapse")
+            if self._hard_collapse(messages, None):
+                compressed = True
+                self.last_operations.append("deterministic_collapse")
         return compressed
 
 
@@ -263,9 +308,9 @@ class SummaryContextStrategy(ContextManager):
                 self.last_operations.append("summary")
                 current = self.count_messages(messages) + fixed_tokens
         if current > self._collapse_at and len(messages) > 4:
-            self._hard_collapse(messages, llm)
-            compressed = True
-            self.last_operations.append("hard_collapse")
+            if self._hard_collapse(messages, llm):
+                compressed = True
+                self.last_operations.append("hard_collapse")
         return compressed
 
 

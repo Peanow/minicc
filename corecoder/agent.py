@@ -21,7 +21,11 @@ from .tools.agent import AgentTool
 from .tools.memory_search import MemorySearchTool
 from .tools.memory_save import MemorySaveTool
 from .prompt import system_prompt
-from .context import ContextManager, create_context_strategy
+from .context import (
+    ContextManager,
+    create_context_strategy,
+    tool_protocol_valid,
+)
 from .tokenizer import TokenCounter
 from .skills import Skill
 from .tools.skill import SkillTool
@@ -400,6 +404,7 @@ class Agent:
                 strategy=self.context.strategy_name,
                 operations=self.context.last_operations,
                 token_counter=self.context.token_counter.name,
+                protocol_valid=tool_protocol_valid(self.messages),
             )
         return changed
 

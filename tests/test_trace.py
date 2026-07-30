@@ -191,11 +191,22 @@ def test_context_compaction_trace_records_strategy_and_counter():
         trace=trace,
         context_strategy=context,
     )
-    agent.messages = [{
-        "role": "tool",
-        "tool_call_id": "old",
-        "content": "\n".join("x" * 100 for _ in range(30)),
-    }]
+    agent.messages = [
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [{
+                "id": "old",
+                "type": "function",
+                "function": {"name": "echo", "arguments": "{}"},
+            }],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "old",
+            "content": "\n".join("x" * 100 for _ in range(30)),
+        },
+    ]
 
     assert agent._maybe_compress()
     event = next(item for item in trace.events if item["event"] == "context_compacted")
@@ -205,3 +216,4 @@ def test_context_compaction_trace_records_strategy_and_counter():
     assert event["data"]["before_tokens"] > event["data"]["after_tokens"]
     assert "tool_snip" in event["data"]["operations"]
     assert event["data"]["after_tokens"] == agent.context_tokens()
+    assert event["data"]["protocol_valid"]
