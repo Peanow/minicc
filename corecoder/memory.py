@@ -36,6 +36,9 @@ _DB_NAME = "memory.db"
 
 
 def _db_path() -> Path:
+    override = os.getenv("CORECODER_MEMORY_DB")
+    if override:
+        return Path(override).expanduser().resolve()
     return _MEMORY_DIR / _DB_NAME
 
 

@@ -19,6 +19,15 @@ from corecoder.memory import (
 )
 
 
+def test_memory_db_path_can_be_isolated_by_environment(tmp_path, monkeypatch):
+    import corecoder.memory as memory_module
+
+    isolated = tmp_path / "eval-memory.db"
+    monkeypatch.setenv("CORECODER_MEMORY_DB", str(isolated))
+
+    assert memory_module._db_path() == isolated.resolve()
+
+
 # ---------------------------------------------------------------------------
 # Observation dataclass
 # ---------------------------------------------------------------------------

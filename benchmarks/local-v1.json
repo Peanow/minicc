@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "name": "local-v1",
+  "models": [
+    {
+      "id": "deepseek-v4-flash",
+      "model": "deepseek-v4-flash",
+      "base_url": "https://api.deepseek.com",
+      "api_key_env": "OPENAI_API_KEY",
+      "enabled": true
+    },
+    {
+      "id": "comparison-model",
+      "model": "replace-with-an-openai-compatible-model-id",
+      "api_key_env": "CORECODER_EVAL_COMPARISON_API_KEY",
+      "enabled": false
+    }
+  ],
+  "strategies": [
+    {
+      "id": "hybrid-workspace",
+      "context_strategy": "hybrid",
+      "permission_mode": "workspace-write",
+      "tokenizer": "auto",
+      "enabled": true
+    },
+    {
+      "id": "truncate-workspace",
+      "context_strategy": "truncate",
+      "permission_mode": "workspace-write",
+      "tokenizer": "auto",
+      "enabled": true
+    },
+    {
+      "id": "summary-workspace",
+      "context_strategy": "summary",
+      "permission_mode": "workspace-write",
+      "tokenizer": "auto",
+      "enabled": false
+    }
+  ],
+  "tasks": [
+    {
+      "id": "python-inclusive-range",
+      "fixture": "tasks/python-inclusive-range",
+      "prompt": "Fix inclusive_sum in range_utils.py. It must include both endpoints and raise ValueError when start is greater than end. Keep the public function signature unchanged. Run the provided verifier before finishing.",
+      "checks": [
+        {
+          "argv": ["python", "verify.py"]
+        }
+      ],
+      "protected_paths": ["verify.py"],
+      "tags": ["python", "bugfix", "boundary"]
+    },
+    {
+      "id": "python-record-normalizer",
+      "fixture": "tasks/python-record-normalizer",
+      "prompt": "Complete normalize_records in normalizer.py. Ignore blank and comment lines, trim each comma-separated field, reject malformed rows with ValueError including the 1-based line number, and return dictionaries with name and role keys. Keep the implementation dependency-free and run verify.py.",
+      "checks": [
+        {
+          "argv": ["python", "verify.py"]
+        }
+      ],
+      "protected_paths": ["verify.py"],
+      "tags": ["python", "feature", "parsing"]
+    },
+    {
+      "id": "python-ttl-cache",
+      "fixture": "tasks/python-ttl-cache",
+      "prompt": "Implement expiration in TTLCache without changing its constructor or method signatures. Use the injected clock, refresh a key's deadline when set is called again, treat ttl_seconds=0 as immediately expired, and remove expired entries when read. Run verify.py.",
+      "checks": [
+        {
+          "argv": ["python", "verify.py"]
+        }
+      ],
+      "protected_paths": ["verify.py"],
+      "tags": ["python", "state", "time"]
+    },
+    {
+      "id": "python-safe-path",
+      "fixture": "tasks/python-safe-path",
+      "prompt": "Harden resolve_member in archive.py against archive path traversal. It must return the resolved destination for safe relative members and raise ValueError for absolute paths, parent traversal, or prefix-confusion escapes. Do not access the filesystem beyond path resolution. Run verify.py.",
+      "checks": [
+        {
+          "argv": ["python", "verify.py"]
+        }
+      ],
+      "protected_paths": ["verify.py"],
+      "tags": ["python", "security", "paths"]
+    },
+    {
+      "id": "python-multifile-slug",
+      "fixture": "tasks/python-multifile-slug",
+      "prompt": "Add a dependency-free slugify function in catalog/text.py and make build_entry in catalog/entries.py use it. Slugs must be lowercase ASCII, collapse runs of non-alphanumeric characters to one hyphen, and never start or end with a hyphen. Preserve build_entry's return shape and run verify.py.",
+      "checks": [
+        {
+          "argv": ["python", "verify.py"]
+        }
+      ],
+      "protected_paths": ["verify.py"],
+      "tags": ["python", "multi-file", "feature"]
+    },
+    {
+      "id": "python-scoped-instructions",
+      "fixture": "tasks/python-scoped-instructions",
+      "prompt": "Fix src/reporting.py so summarize returns the required aggregate for empty and non-empty inputs. Respect all project instructions, keep its public signature stable, and run verify.py.",
+      "checks": [
+        {
+          "argv": ["python", "verify.py"]
+        }
+      ],
+      "protected_paths": ["verify.py"],
+      "tags": ["python", "instructions", "aggregation"]
+    }
+  ]
+}

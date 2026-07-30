@@ -55,6 +55,24 @@ Replay is side-effect free: it neither calls a model nor executes a tool. It
 validates run, LLM, tool, and result lifecycles and reconstructs aggregate
 metrics. The report is a self-contained HTML timeline with escaped tool output.
 
+## Reproducible evaluations
+
+```bash
+# Validate and inspect the task × model × strategy matrix; no API call.
+corecoder eval benchmarks/local-v1.json --dry-run
+
+# Run one isolated case and preserve trace, logs, hashes, and metrics.
+corecoder eval benchmarks/local-v1.json \
+  --task python-safe-path --strategy hybrid-workspace \
+  -o benchmarks/results/local-v1-smoke
+```
+
+The first benchmark batch contains six deliberately unsolved fixtures across
+bug fixing, parsing, state, path security, multi-file editing, and scoped
+instructions. Verifiers are hash-protected so an agent cannot pass by rewriting
+its checks. See [`benchmarks/README.md`](benchmarks/README.md) for the evidence
+format and metric policy.
+
 ---
 
 ```

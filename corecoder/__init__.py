@@ -1,4 +1,4 @@
-"""CoreCoder - Minimal AI coding agent inspired by Claude Code's architecture."""
+"""CoreCoder - observable, policy-aware coding-agent experimentation runtime."""
 
 __version__ = "0.3.0"
 
@@ -11,6 +11,7 @@ from corecoder.policy import ExecutionPolicy, PermissionMode
 from corecoder.context import create_context_strategy
 from corecoder.tokenizer import create_token_counter
 from corecoder.replay import generate_html_report, replay_trace
+from corecoder.eval import aggregate_records, load_manifest, plan_cases, run_evaluation
 
 __all__ = [
     "Agent", "LLM", "Config", "ALL_TOOLS", "ToolRegistry",
@@ -18,4 +19,5 @@ __all__ = [
     "ExecutionPolicy", "PermissionMode",
     "create_context_strategy", "create_token_counter",
     "generate_html_report", "replay_trace",
+    "aggregate_records", "load_manifest", "plan_cases", "run_evaluation",
 ]

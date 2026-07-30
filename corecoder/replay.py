@@ -70,11 +70,19 @@ def replay_trace(path: str | Path) -> ReplaySummary:
     completion_tokens = 0
     status = "incomplete"
     changed_files: set[str] = set()
+    run_started_at: float | None = None
+    run_finished_at: float | None = None
 
     for index, event in enumerate(events):
         name = event["event"]
         data = event.get("data") or {}
-        if name == "llm_started":
+        timestamp = event.get("timestamp")
+        if name == "run_started":
+            if run_started_at is not None and run_finished_at is None:
+                errors.append(f"event {index}: run_started while a run is active")
+            if isinstance(timestamp, (int, float)):
+                run_started_at = float(timestamp)
+        elif name == "llm_started":
             active_llm += 1
         elif name == "llm_finished":
             if active_llm <= 0:
@@ -105,6 +113,10 @@ def replay_trace(path: str | Path) -> ReplaySummary:
             else:
                 pending_results.remove(tool_call_id)
         elif name == "run_finished":
+            if run_started_at is None:
+                errors.append(f"event {index}: run_finished without run_started")
+            if isinstance(timestamp, (int, float)):
+                run_finished_at = float(timestamp)
             status = str(data.get("status") or "unknown")
             changed_files.update(str(path) for path in data.get("changed_files") or [])
 
@@ -115,22 +127,25 @@ def replay_trace(path: str | Path) -> ReplaySummary:
         errors.append(f"{unfinished_tools} unfinished tool call(s)")
     if pending_results:
         errors.append(f"{len(pending_results)} missing tool result(s)")
-    if counts["run_started"] != counts["run_finished"]:
+    if counts["run_started"] != 1 or counts["run_finished"] != 1:
         errors.append(
-            f"run lifecycle mismatch: {counts['run_started']} started, "
+            f"expected one run lifecycle: {counts['run_started']} started, "
             f"{counts['run_finished']} finished"
         )
 
-    timestamps = [
-        float(event["timestamp"])
-        for event in events
-        if isinstance(event.get("timestamp"), (int, float))
-    ]
-    duration_ms = (
-        round((max(timestamps) - min(timestamps)) * 1000, 2)
-        if len(timestamps) >= 2
-        else 0.0
-    )
+    if run_started_at is not None and run_finished_at is not None:
+        duration_ms = round(max(0.0, run_finished_at - run_started_at) * 1000, 2)
+    else:
+        timestamps = [
+            float(event["timestamp"])
+            for event in events
+            if isinstance(event.get("timestamp"), (int, float))
+        ]
+        duration_ms = (
+            round((max(timestamps) - min(timestamps)) * 1000, 2)
+            if len(timestamps) >= 2
+            else 0.0
+        )
     return ReplaySummary(
         run_id=run_id,
         valid=not errors,

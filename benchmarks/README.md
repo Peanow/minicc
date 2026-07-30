@@ -1,0 +1,84 @@
+# CoreCoder evaluation harness
+
+This directory contains reproducible coding-agent tasks and versioned manifests.
+It is intentionally separate from the unit-test suite:
+
+- a **fixture** is the exact unsolved workspace copied for each case;
+- a **check** is a deterministic command that decides whether the task passed;
+- a **model profile** contains public connection metadata and the name of an
+  environment variable holding its API key;
+- a **strategy profile** selects context, permission, and tokenizer behavior;
+- a **case** is one task × model × strategy combination.
+
+## Inspect the plan
+
+Dry runs validate every fixture and protected path without loading an API key:
+
+```bash
+corecoder eval benchmarks/local-v1.json --dry-run
+corecoder eval benchmarks/local-v1.json --dry-run \
+  --task python-safe-path --strategy hybrid-workspace
+```
+
+`local-v1.json` currently contains six deliberately unsolved local tasks and two
+enabled strategy profiles. The comparison model and summary strategy are
+disabled until their connection and cost settings are supplied explicitly.
+
+## Run cases
+
+```bash
+corecoder eval benchmarks/local-v1.json \
+  --task python-safe-path \
+  --strategy hybrid-workspace \
+  -o benchmarks/results/local-v1-smoke
+```
+
+The runner reads credentials only from each model profile's `api_key_env`. It
+does not serialize the key or add it to process arguments. The agent receives
+only the selected credential long enough to initialize its model client; tool
+and verifier subprocesses run with credential-like environment variables
+removed. Each case runs in a fresh temporary workspace with an isolated SQLite
+memory database.
+
+An output directory contains:
+
+```text
+manifest.snapshot.json
+run.json                 # status, timestamps, plan, manifest/fixture/harness hashes
+results.jsonl            # one append-only record per completed case
+summary.json             # aggregate success, token, time, cost, safety metrics
+cases/<case-id>/
+  trace.jsonl
+  agent.stdout.log
+  agent.stderr.log
+  memory.db
+```
+
+The runner refuses to append to an existing `results.jsonl`, preventing
+accidental mixing of separate experiments.
+
+## Integrity rules
+
+Every bundled task declares `protected_paths`, currently its `verify.py`.
+The runner hashes protected files before and after the agent executes. A case
+cannot pass if the verifier was changed, even when the changed verifier exits
+successfully.
+
+Checks are argument arrays, never shell strings. Fixture paths and protected
+paths must remain inside the manifest directory and task fixture respectively;
+external symlinks are rejected.
+
+## Metric policy
+
+Success requires all of the following:
+
+1. the agent process exits successfully;
+2. Trace Replay reports one complete, valid run;
+3. the run status is `completed`;
+4. protected files are unchanged;
+5. every deterministic check passes.
+
+Token counts and lifecycle duration come from the trace; wall duration also
+includes deterministic checks. Aggregate cost remains `null` unless every case
+has both input and output prices in its model profile. This prevents partial,
+unknown, or outdated pricing from being presented as measured total cost.

@@ -4,6 +4,7 @@ import sys
 import os
 import argparse
 import json
+import time
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -27,6 +28,7 @@ from .policy import ExecutionPolicy, PermissionMode
 from .context import create_context_strategy
 from .tokenizer import create_token_counter
 from .replay import generate_html_report, replay_trace
+from .eval import load_manifest, plan_cases, run_evaluation
 from . import __version__
 
 console = Console()
@@ -70,6 +72,21 @@ def _parse_args():
     )
     report_parser.add_argument("trace_path")
     report_parser.add_argument("-o", "--output")
+    eval_parser = subcommands.add_parser(
+        "eval",
+        help="Run or inspect a reproducible benchmark manifest",
+    )
+    eval_parser.add_argument("manifest_path")
+    eval_parser.add_argument("-o", "--output")
+    eval_parser.add_argument("--task", action="append", dest="eval_tasks")
+    eval_parser.add_argument("--model-profile", action="append", dest="eval_models")
+    eval_parser.add_argument("--strategy", action="append", dest="eval_strategies")
+    eval_parser.add_argument("--limit", type=int)
+    eval_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate and print the case plan without calling a model",
+    )
     p.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
     return p.parse_args()
 
@@ -99,8 +116,60 @@ def main():
         if not summary.valid:
             console.print("[yellow]Warning: trace validation reported errors.[/yellow]")
         return
+    if args.command == "eval":
+        try:
+            manifest = load_manifest(args.manifest_path)
+            cases = plan_cases(
+                manifest,
+                task_ids=set(args.eval_tasks or []),
+                model_ids=set(args.eval_models or []),
+                strategy_ids=set(args.eval_strategies or []),
+                limit=args.limit,
+            )
+        except (OSError, ValueError) as exc:
+            console.print(f"[red]Evaluation plan failed:[/red] {exc}")
+            sys.exit(2)
+        if args.dry_run:
+            payload = {
+                "manifest": manifest.name,
+                "case_count": len(cases),
+                "cases": [case.id for case in cases],
+            }
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return
+        if not cases:
+            console.print("[yellow]Evaluation plan has no enabled cases.[/yellow]")
+            return
+        from .config import _load_dotenv
+
+        _load_dotenv()
+        output = args.output or os.path.join(
+            "benchmarks",
+            "results",
+            f"{manifest.name}-{time.strftime('%Y%m%d-%H%M%S')}",
+        )
+        try:
+            summary = run_evaluation(manifest, cases, output)
+        except (OSError, ValueError) as exc:
+            console.print(f"[red]Evaluation failed:[/red] {exc}")
+            sys.exit(2)
+        console.print(
+            f"[green]Evaluation complete:[/green] "
+            f"{summary.successful_cases}/{summary.total_cases} passed"
+        )
+        console.print(f"[dim]Evidence: {os.path.abspath(output)}[/dim]")
+        return
 
     config = Config.from_env()
+    if os.getenv("CORECODER_SANITIZE_TOOL_ENV") == "1":
+        for key in (
+            "CORECODER_API_KEY",
+            "OPENAI_API_KEY",
+            "DEEPSEEK_API_KEY",
+            "CORECODER_EVAL_COMPARISON_API_KEY",
+        ):
+            os.environ.pop(key, None)
+        os.environ.pop("CORECODER_SANITIZE_TOOL_ENV", None)
 
     # CLI args override env vars
     if args.model:

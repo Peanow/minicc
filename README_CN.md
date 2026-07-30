@@ -144,6 +144,23 @@ Replay 不调用模型、也不重新执行工具，只校验 LLM/工具/Run 生
 重建调用数、token、耗时、状态和修改文件摘要。HTML 报告是无外部资源的单文件，
 可以直接用于调试或项目演示；工具输出会经过 HTML 转义。
 
+## 可复现评测
+
+```bash
+# 只校验并展开任务 × 模型 × 策略矩阵，不调用 API
+corecoder eval benchmarks/local-v1.json --dry-run
+
+# 隔离运行一个 case，并保留 Trace、日志、哈希和指标
+corecoder eval benchmarks/local-v1.json \
+  --task python-safe-path --strategy hybrid-workspace \
+  -o benchmarks/results/local-v1-smoke
+```
+
+首批包含 6 个刻意保持未解决状态的本地任务，覆盖边界修复、解析、状态、路径安全、
+多文件修改和分层指令。评测器会在运行前后校验 `verify.py` 哈希，避免 Agent 通过
+篡改测试“刷成功率”。证据目录格式和指标口径见
+[`benchmarks/README.md`](benchmarks/README.md)。
+
 ## 架构
 
 整个项目一目了然：

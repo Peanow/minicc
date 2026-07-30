@@ -107,6 +107,26 @@ corecoder report .tmp/sample-run.jsonl -o .tmp/sample-run.html
 这两个命令不需要 API Key。Replay 不执行 Trace 中记录的工具，因此可以安全地用于
 完整性检查和指标汇总。
 
+## 评测任务
+
+先检查将要执行的矩阵：
+
+```bash
+corecoder eval benchmarks/local-v1.json --dry-run
+```
+
+再按任务和策略小范围运行，避免无意中发起整套付费调用：
+
+```bash
+corecoder eval benchmarks/local-v1.json \
+  --task python-inclusive-range \
+  --strategy hybrid-workspace \
+  -o benchmarks/results/local-v1-smoke
+```
+
+运行结果会保留 manifest/fixture 哈希、逐 case Trace、标准输出/错误、校验结果和
+汇总指标。API Key 仅按 manifest 的 `api_key_env` 从环境读取。
+
 ## Workspace 验证目录
 
 `workspace/` 是独立的功能验证沙盒，CoreCoder 在此操作不会影响项目源码。
