@@ -219,8 +219,9 @@ corecoder compare benchmarks/results/run-a benchmarks/results/run-b \
 任务结果矩阵。Tier 1 默认对 `hybrid`、`truncate`、`summary` 在相同上下文预算下
 各重复运行三次。
 
-Tier 2 已加入首个真实仓库 pilot：固定到 python-diskcache PR #288 修复前的 commit，
-保留上游 PR、许可证和来源信息，并使用不进入 Agent 工作区的隐藏回归检查。
+Tier 2 当前包含三个固定版本的真实仓库回归任务，来源于 python-diskcache、
+cachetools 和 more-itertools；每个任务均保留上游 commit、PR、许可证与来源信息，
+并使用不进入 Agent 工作区的隐藏回归检查。
 
 提交评测证据前，先审计原始 Trace 并只导出可移植指标与哈希：
 

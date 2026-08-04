@@ -17,9 +17,9 @@ Tier 1 is not presented as a general coding-quality benchmark.
 ## Tier 2 — small real repositories
 
 Tier 2 will contain 8–12 pinned, license-compatible repository snapshots.
-The current pilot reproduces python-diskcache PR #288 from its pre-fix commit;
-it retains the Apache-2.0 license and keeps the upstream regression assertion
-outside the Agent workspace.
+The current three-task pilot reproduces regressions from python-diskcache,
+cachetools, and more-itertools at their pre-fix commits. It retains upstream
+licenses and keeps regression assertions outside the Agent workspace.
 
 Every task must include:
 

@@ -85,6 +85,118 @@
         "failure-diagnosis"
       ],
       "timeout_seconds": 420
+    },
+    {
+      "id": "cachetools-grow-existing",
+      "fixture": "tier2/tasks/cachetools-grow-existing",
+      "prompt": "Fix the cache over-eviction regression described in upstream issue #405 and PR #408. Growing an existing key must reserve only the additional size, so unrelated entries are not evicted when the updated cache still fits within maxsize. Preserve behavior for inserts, same-size replacements, shrinking values, and updates where eviction removes the target key. Keep the change focused. Run the relevant cache tests with `python -m pytest -q -o addopts= tests/test_cache.py tests/test_fifo.py tests/test_lfu.py tests/test_lru.py tests/test_rr.py tests/test_ttl.py tests/test_tlru.py`.",
+      "checks": [
+        {
+          "argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-o",
+            "addopts=",
+            "tests/test_cache.py",
+            "tests/test_fifo.py",
+            "tests/test_lfu.py",
+            "tests/test_lru.py",
+            "tests/test_rr.py",
+            "tests/test_ttl.py",
+            "tests/test_tlru.py"
+          ],
+          "timeout_seconds": 60
+        }
+      ],
+      "hidden_checks": [
+        {
+          "path": "tier2/hidden/cachetools-grow-existing.py",
+          "timeout_seconds": 15
+        }
+      ],
+      "protected_paths": [
+        "conftest.py",
+        "tests/__init__.py",
+        "tests/test_cache.py",
+        "tests/test_fifo.py",
+        "tests/test_lfu.py",
+        "tests/test_lru.py",
+        "tests/test_rr.py",
+        "tests/test_ttl.py",
+        "tests/test_tlru.py",
+        "LICENSE",
+        "UPSTREAM.md"
+      ],
+      "expected_change_paths": [
+        "src/cachetools/__init__.py"
+      ],
+      "provenance": {
+        "repository": "https://github.com/tkem/cachetools",
+        "commit": "13bb86a55e36e501cf0b3e4c35db516ed9409fd7",
+        "license": "MIT",
+        "issue": "https://github.com/tkem/cachetools/pull/408"
+      },
+      "tags": [
+        "python",
+        "real-repository",
+        "bugfix",
+        "cache-invariant",
+        "failure-diagnosis",
+        "error-recovery"
+      ],
+      "timeout_seconds": 420
+    },
+    {
+      "id": "more-itertools-repeat-iterators",
+      "fixture": "tier2/tasks/more-itertools-repeat-iterators",
+      "prompt": "Fix the iterator-repeat regression described in upstream PR #1125. `gray_product` and `partial_product` must produce the same results for one-shot iterator arguments as for reusable iterable arguments when repeat is greater than one. Preserve behavior for repeat=1 and ordinary sequences, update both affected implementations, and keep the change focused. Run `python -m pytest -q -o addopts= tests/test_more.py -k 'GrayProductTests or PartialProductTests'`.",
+      "checks": [
+        {
+          "argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-o",
+            "addopts=",
+            "tests/test_more.py",
+            "-k",
+            "GrayProductTests or PartialProductTests"
+          ],
+          "timeout_seconds": 60
+        }
+      ],
+      "hidden_checks": [
+        {
+          "path": "tier2/hidden/more-itertools-repeat-iterators.py",
+          "timeout_seconds": 15
+        }
+      ],
+      "protected_paths": [
+        "tests/test_more.py",
+        "LICENSE",
+        "UPSTREAM.md"
+      ],
+      "expected_change_paths": [
+        "more_itertools/more.py"
+      ],
+      "provenance": {
+        "repository": "https://github.com/more-itertools/more-itertools",
+        "commit": "fdbd43c569feb4388302ddee0551d18edd39fadc",
+        "license": "MIT",
+        "issue": "https://github.com/more-itertools/more-itertools/pull/1125"
+      },
+      "tags": [
+        "python",
+        "real-repository",
+        "bugfix",
+        "iterator-semantics",
+        "multi-location-edit",
+        "long-context"
+      ],
+      "timeout_seconds": 420
     }
   ]
 }

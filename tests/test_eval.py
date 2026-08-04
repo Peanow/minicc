@@ -151,39 +151,45 @@ def test_tier2_manifest_requires_pinned_repository_provenance(tmp_path):
         load_manifest(path)
 
 
-def test_tier2_pilot_is_pinned_and_starts_with_hidden_regression():
+def test_tier2_tasks_are_pinned_and_start_with_hidden_regressions():
     manifest = load_manifest(TIER2_MANIFEST_PATH)
     cases = plan_cases(manifest, repetitions=1)
-    task = manifest.tasks[0]
 
     assert manifest.tier == "tier2"
-    assert len(cases) == 3
-    assert task.provenance.license == "Apache-2.0"
-    assert task.provenance.issue.endswith("/pull/288")
-    public = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pytest",
-            "-q",
-            "-o",
-            "addopts=",
-            "tests/test_deque.py",
-        ],
-        cwd=task.fixture,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert public.returncode == 0
-    hidden = subprocess.run(
-        [sys.executable, str(task.hidden_checks[0].path)],
-        cwd=task.fixture,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert hidden.returncode != 0
+    assert len(manifest.tasks) == 3
+    assert len(cases) == len(manifest.tasks) * len(manifest.strategies)
+    assert {task.provenance.license for task in manifest.tasks} == {
+        "Apache-2.0",
+        "MIT",
+    }
+    assert all(task.provenance.issue for task in manifest.tasks)
+
+    for task in manifest.tasks:
+        for check in task.checks:
+            argv = list(check.argv)
+            if argv[0] == "python":
+                argv[0] = sys.executable
+            public = subprocess.run(
+                argv,
+                cwd=task.fixture,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert public.returncode == 0, (
+                task.id,
+                public.stdout,
+                public.stderr,
+            )
+        for check in task.hidden_checks:
+            hidden = subprocess.run(
+                [sys.executable, str(check.path)],
+                cwd=task.fixture,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert hidden.returncode != 0, task.id
 
 
 def test_aggregate_records_does_not_report_partial_cost():
