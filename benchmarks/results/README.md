@@ -24,3 +24,17 @@ Available reviewed evidence:
 
 These Tier 2 results cover one pilot task and are engineering evidence, not a
 general model-quality claim.
+
+- `deepseek-v4-flash-tier2-cachetools-guarded-smoke`: one guarded hybrid run
+  from runtime commit `118bad2`. The model exhausted two empty-response retries
+  and failed explicitly with `empty_response`; this is recovery-boundary
+  evidence, not a task-quality result.
+- `deepseek-v4-flash-tier2-more-itertools-hybrid-guarded`: one successful
+  guarded hybrid run. A stagnation recovery converted prolonged inspection into
+  a focused source edit.
+- `deepseek-v4-flash-tier2-more-itertools-other-guarded`: successful truncate
+  and summary smoke cases. Truncate used stagnation recovery; summary used one
+  empty-response retry.
+
+The guarded more-itertools runs are one sample per strategy. They validate the
+runtime and task harness but are not yet a repeated strategy comparison.

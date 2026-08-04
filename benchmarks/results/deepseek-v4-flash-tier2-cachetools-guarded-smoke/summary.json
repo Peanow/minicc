@@ -1,0 +1,67 @@
+{
+  "by_model": {
+    "deepseek-v4-flash": {
+      "cases": 1,
+      "context_compactions": 0,
+      "duration_ms": 75599.82,
+      "failure_recovery_rate": 0.0,
+      "hidden_checks_passed": 0,
+      "hidden_checks_total": 1,
+      "hidden_pass_rate": 0.0,
+      "mean_edit_precision": 0.0,
+      "mean_unrelated_file_modification_rate": 0.0,
+      "policy_denials_by_risk": {
+        "shell-composition": 1
+      },
+      "recovered_runs": 0,
+      "runs_with_tool_failures": 1,
+      "success_rate": 0.0,
+      "successful": 0,
+      "tokens": 55695,
+      "wall_duration_ms": 76471.67
+    }
+  },
+  "by_strategy": {
+    "hybrid-workspace": {
+      "cases": 1,
+      "context_compactions": 0,
+      "duration_ms": 75599.82,
+      "failure_recovery_rate": 0.0,
+      "hidden_checks_passed": 0,
+      "hidden_checks_total": 1,
+      "hidden_pass_rate": 0.0,
+      "mean_edit_precision": 0.0,
+      "mean_unrelated_file_modification_rate": 0.0,
+      "policy_denials_by_risk": {
+        "shell-composition": 1
+      },
+      "recovered_runs": 0,
+      "runs_with_tool_failures": 1,
+      "success_rate": 0.0,
+      "successful": 0,
+      "tokens": 55695,
+      "wall_duration_ms": 76471.67
+    }
+  },
+  "completion_tokens": 12718,
+  "context_compactions": 0,
+  "duration_ms": 75599.82,
+  "estimated_cost_usd": null,
+  "failure_recovery_rate": 0.0,
+  "hidden_checks_passed": 0,
+  "hidden_checks_total": 1,
+  "hidden_pass_rate": 0.0,
+  "mean_edit_precision": 0.0,
+  "mean_unrelated_file_modification_rate": 0.0,
+  "policy_denials": 1,
+  "policy_denials_by_risk": {
+    "shell-composition": 1
+  },
+  "prompt_tokens": 42977,
+  "recovered_runs": 0,
+  "runs_with_tool_failures": 1,
+  "success_rate": 0.0,
+  "successful_cases": 0,
+  "total_cases": 1,
+  "wall_duration_ms": 76471.67
+}

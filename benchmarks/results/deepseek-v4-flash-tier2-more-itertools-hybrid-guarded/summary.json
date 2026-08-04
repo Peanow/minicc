@@ -1,0 +1,79 @@
+{
+  "by_model": {
+    "deepseek-v4-flash": {
+      "cases": 1,
+      "context_compactions": 0,
+      "duration_ms": 105431.3,
+      "failure_recovery_rate": 1.0,
+      "hidden_checks_passed": 1,
+      "hidden_checks_total": 1,
+      "hidden_pass_rate": 1.0,
+      "mean_edit_precision": 0.5,
+      "mean_unrelated_file_modification_rate": 0.5,
+      "policy_denials_by_risk": {
+        "destructive": 1,
+        "network": 1,
+        "shell-composition": 6,
+        "unknown": 2,
+        "workspace-execution": 3
+      },
+      "recovered_runs": 1,
+      "runs_with_tool_failures": 1,
+      "success_rate": 1.0,
+      "successful": 1,
+      "tokens": 277046,
+      "wall_duration_ms": 106286.96
+    }
+  },
+  "by_strategy": {
+    "hybrid-workspace": {
+      "cases": 1,
+      "context_compactions": 0,
+      "duration_ms": 105431.3,
+      "failure_recovery_rate": 1.0,
+      "hidden_checks_passed": 1,
+      "hidden_checks_total": 1,
+      "hidden_pass_rate": 1.0,
+      "mean_edit_precision": 0.5,
+      "mean_unrelated_file_modification_rate": 0.5,
+      "policy_denials_by_risk": {
+        "destructive": 1,
+        "network": 1,
+        "shell-composition": 6,
+        "unknown": 2,
+        "workspace-execution": 3
+      },
+      "recovered_runs": 1,
+      "runs_with_tool_failures": 1,
+      "success_rate": 1.0,
+      "successful": 1,
+      "tokens": 277046,
+      "wall_duration_ms": 106286.96
+    }
+  },
+  "completion_tokens": 11209,
+  "context_compactions": 0,
+  "duration_ms": 105431.3,
+  "estimated_cost_usd": null,
+  "failure_recovery_rate": 1.0,
+  "hidden_checks_passed": 1,
+  "hidden_checks_total": 1,
+  "hidden_pass_rate": 1.0,
+  "mean_edit_precision": 0.5,
+  "mean_unrelated_file_modification_rate": 0.5,
+  "policy_denials": 13,
+  "policy_denials_by_risk": {
+    "destructive": 1,
+    "network": 1,
+    "shell-composition": 6,
+    "unknown": 2,
+    "workspace-execution": 3
+  },
+  "prompt_tokens": 265837,
+  "recovered_runs": 1,
+  "runs_with_tool_failures": 1,
+  "success_rate": 1.0,
+  "successful_cases": 1,
+  "total_cases": 1,
+  "wall_duration_ms": 106286.96
+}

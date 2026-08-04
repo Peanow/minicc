@@ -1,0 +1,68 @@
+{
+  "excluded_artifacts": [
+    "trace contents",
+    "agent stdout/stderr contents",
+    "SQLite memory",
+    "temporary workspaces"
+  ],
+  "exported_at": "2026-08-04T15:21:09.468924+00:00",
+  "manifest_sanitized": false,
+  "schema_version": 1,
+  "source_hashes": {
+    "manifest": "2bb8a8df4aa41f80bc92ad8e2eb3c9924ae559f1fd37bf4b014e1899f087e8ca",
+    "results": "b2554cf248b39f7f7b7c608d92f1d2e107bf3ecc2832a74f35f5c4690520e787",
+    "run": "1068b59bb204a3ce3b0d625805d23c3c0f48ddea4099ff7ab84b6550c666d917",
+    "summary": "d7bdeeb7be02df8253d709e2ed56a9505ccb68f14fab42ad1bd260e54a06fea8"
+  },
+  "source_run": {
+    "cases": [
+      "more-itertools-repeat-iterators__deepseek-v4-flash__hybrid-workspace"
+    ],
+    "completed_at": "2026-08-04T15:15:30.498242+00:00",
+    "fixture_digests": {
+      "cachetools-grow-existing": "8f1bd076cfce8ceff9466fca1239cdd4d4d8182a0c0cc8ffd663e32ff0d22913",
+      "diskcache-peek-large-file": "dfb282983ccc84c510bd7b0c930979ade8953cb6d027d210b5634fb64be1bb31",
+      "more-itertools-repeat-iterators": "bfde891052881c25788acf5a57382cae4835dc135e54dddcc9e0c4f3045ddf56"
+    },
+    "harness_digest": "98817a534787110f41cac05070182b6c577fff95f0d767062a31c65e997bf834",
+    "hidden_check_digests": {
+      "cachetools-grow-existing": {
+        "tier2/hidden/cachetools-grow-existing.py": "b142c4e263c77a8be1d2bd05ce5a7b0dbc36cf5b7f2da191c69d1caadd8277f5"
+      },
+      "diskcache-peek-large-file": {
+        "tier2/hidden/diskcache-peek-large-file.py": "b56f51e82a53dd05f602585ffc3d26858fa4f7533ee0aabed2651bbe9c6ca887"
+      },
+      "more-itertools-repeat-iterators": {
+        "tier2/hidden/more-itertools-repeat-iterators.py": "baecba8e5b11bab0a5e136a1afb5f388d8e41849fae4bcf0384d7903dbfac5f2"
+      }
+    },
+    "manifest": "tier2-real-repos-pilot",
+    "manifest_sha256": "2bb8a8df4aa41f80bc92ad8e2eb3c9924ae559f1fd37bf4b014e1899f087e8ca",
+    "python": "3.10.20 (main, Apr  7 2026, 21:06:06) [Clang 22.1.1 ]",
+    "repetitions": 1,
+    "schema_version": 1,
+    "started_at": "2026-08-04T15:13:44.193966+00:00",
+    "status": "completed",
+    "task_provenance": {
+      "cachetools-grow-existing": {
+        "commit": "13bb86a55e36e501cf0b3e4c35db516ed9409fd7",
+        "issue": "https://github.com/tkem/cachetools/pull/408",
+        "license": "MIT",
+        "repository": "https://github.com/tkem/cachetools"
+      },
+      "diskcache-peek-large-file": {
+        "commit": "4d3068625a3edcd2f5a1f6f104ef621f1f7ea395",
+        "issue": "https://github.com/grantjenks/python-diskcache/pull/288",
+        "license": "Apache-2.0",
+        "repository": "https://github.com/grantjenks/python-diskcache"
+      },
+      "more-itertools-repeat-iterators": {
+        "commit": "fdbd43c569feb4388302ddee0551d18edd39fadc",
+        "issue": "https://github.com/more-itertools/more-itertools/pull/1125",
+        "license": "MIT",
+        "repository": "https://github.com/more-itertools/more-itertools"
+      }
+    },
+    "tier": "tier2"
+  }
+}

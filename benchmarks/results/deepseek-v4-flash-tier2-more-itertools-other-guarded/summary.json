@@ -1,0 +1,101 @@
+{
+  "by_model": {
+    "deepseek-v4-flash": {
+      "cases": 2,
+      "context_compactions": 0,
+      "duration_ms": 223965.66,
+      "failure_recovery_rate": 1.0,
+      "hidden_checks_passed": 2,
+      "hidden_checks_total": 2,
+      "hidden_pass_rate": 1.0,
+      "mean_edit_precision": 0.4166,
+      "mean_unrelated_file_modification_rate": 0.5834,
+      "policy_denials_by_risk": {
+        "destructive": 2,
+        "network": 1,
+        "shell-composition": 14,
+        "unknown": 1,
+        "workspace-execution": 4
+      },
+      "recovered_runs": 2,
+      "runs_with_tool_failures": 2,
+      "success_rate": 1.0,
+      "successful": 2,
+      "tokens": 624141,
+      "wall_duration_ms": 225605.35
+    }
+  },
+  "by_strategy": {
+    "summary-workspace": {
+      "cases": 1,
+      "context_compactions": 0,
+      "duration_ms": 113713.76,
+      "failure_recovery_rate": 1.0,
+      "hidden_checks_passed": 1,
+      "hidden_checks_total": 1,
+      "hidden_pass_rate": 1.0,
+      "mean_edit_precision": 0.3333,
+      "mean_unrelated_file_modification_rate": 0.6667,
+      "policy_denials_by_risk": {
+        "destructive": 1,
+        "network": 1,
+        "shell-composition": 6,
+        "workspace-execution": 1
+      },
+      "recovered_runs": 1,
+      "runs_with_tool_failures": 1,
+      "success_rate": 1.0,
+      "successful": 1,
+      "tokens": 302818,
+      "wall_duration_ms": 114544.6
+    },
+    "truncate-workspace": {
+      "cases": 1,
+      "context_compactions": 0,
+      "duration_ms": 110251.9,
+      "failure_recovery_rate": 1.0,
+      "hidden_checks_passed": 1,
+      "hidden_checks_total": 1,
+      "hidden_pass_rate": 1.0,
+      "mean_edit_precision": 0.5,
+      "mean_unrelated_file_modification_rate": 0.5,
+      "policy_denials_by_risk": {
+        "destructive": 1,
+        "shell-composition": 8,
+        "unknown": 1,
+        "workspace-execution": 3
+      },
+      "recovered_runs": 1,
+      "runs_with_tool_failures": 1,
+      "success_rate": 1.0,
+      "successful": 1,
+      "tokens": 321323,
+      "wall_duration_ms": 111060.75
+    }
+  },
+  "completion_tokens": 26060,
+  "context_compactions": 0,
+  "duration_ms": 223965.66,
+  "estimated_cost_usd": null,
+  "failure_recovery_rate": 1.0,
+  "hidden_checks_passed": 2,
+  "hidden_checks_total": 2,
+  "hidden_pass_rate": 1.0,
+  "mean_edit_precision": 0.4166,
+  "mean_unrelated_file_modification_rate": 0.5834,
+  "policy_denials": 22,
+  "policy_denials_by_risk": {
+    "destructive": 2,
+    "network": 1,
+    "shell-composition": 14,
+    "unknown": 1,
+    "workspace-execution": 4
+  },
+  "prompt_tokens": 598081,
+  "recovered_runs": 2,
+  "runs_with_tool_failures": 2,
+  "success_rate": 1.0,
+  "successful_cases": 2,
+  "total_cases": 2,
+  "wall_duration_ms": 225605.35
+}

@@ -1,0 +1,202 @@
+{
+  "models": [
+    {
+      "api_key_env": "OPENAI_API_KEY",
+      "base_url": "https://api.deepseek.com",
+      "enabled": true,
+      "id": "deepseek-v4-flash",
+      "model": "deepseek-v4-flash"
+    }
+  ],
+  "name": "tier2-real-repos-pilot",
+  "repetitions": 3,
+  "schema_version": 1,
+  "strategies": [
+    {
+      "context_strategy": "hybrid",
+      "enabled": true,
+      "id": "hybrid-workspace",
+      "max_context_tokens": 32000,
+      "permission_mode": "workspace-write",
+      "tokenizer": "auto"
+    },
+    {
+      "context_strategy": "truncate",
+      "enabled": true,
+      "id": "truncate-workspace",
+      "max_context_tokens": 32000,
+      "permission_mode": "workspace-write",
+      "tokenizer": "auto"
+    },
+    {
+      "context_strategy": "summary",
+      "enabled": true,
+      "id": "summary-workspace",
+      "max_context_tokens": 32000,
+      "permission_mode": "workspace-write",
+      "tokenizer": "auto"
+    }
+  ],
+  "tasks": [
+    {
+      "checks": [
+        {
+          "argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-o",
+            "addopts=",
+            "tests/test_deque.py"
+          ],
+          "timeout_seconds": 60
+        }
+      ],
+      "expected_change_paths": [
+        "diskcache/core.py"
+      ],
+      "fixture": "tier2/tasks/diskcache-peek-large-file",
+      "hidden_checks": [
+        {
+          "path": "tier2/hidden/diskcache-peek-large-file.py",
+          "timeout_seconds": 15
+        }
+      ],
+      "id": "diskcache-peek-large-file",
+      "prompt": "Fix the Deque.peek regression described in upstream PR #288. When a cached value is large enough to be stored in a file, peeking must return the value without deleting or invalidating the backing data, and repeated peeks must remain safe. Preserve the public API, keep the change focused, and run the existing Deque tests.",
+      "protected_paths": [
+        "tests/test_deque.py",
+        "LICENSE",
+        "UPSTREAM.md"
+      ],
+      "provenance": {
+        "commit": "4d3068625a3edcd2f5a1f6f104ef621f1f7ea395",
+        "issue": "https://github.com/grantjenks/python-diskcache/pull/288",
+        "license": "Apache-2.0",
+        "repository": "https://github.com/grantjenks/python-diskcache"
+      },
+      "tags": [
+        "python",
+        "real-repository",
+        "bugfix",
+        "file-backed-storage",
+        "failure-diagnosis"
+      ],
+      "timeout_seconds": 420
+    },
+    {
+      "checks": [
+        {
+          "argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-o",
+            "addopts=",
+            "tests/test_cache.py",
+            "tests/test_fifo.py",
+            "tests/test_lfu.py",
+            "tests/test_lru.py",
+            "tests/test_rr.py",
+            "tests/test_ttl.py",
+            "tests/test_tlru.py"
+          ],
+          "timeout_seconds": 60
+        }
+      ],
+      "expected_change_paths": [
+        "src/cachetools/__init__.py"
+      ],
+      "fixture": "tier2/tasks/cachetools-grow-existing",
+      "hidden_checks": [
+        {
+          "path": "tier2/hidden/cachetools-grow-existing.py",
+          "timeout_seconds": 15
+        }
+      ],
+      "id": "cachetools-grow-existing",
+      "prompt": "Fix the cache over-eviction regression described in upstream issue #405 and PR #408. Growing an existing key must reserve only the additional size, so unrelated entries are not evicted when the updated cache still fits within maxsize. Preserve behavior for inserts, same-size replacements, shrinking values, and updates where eviction removes the target key. Keep the change focused. Run the relevant cache tests with `python -m pytest -q -o addopts= tests/test_cache.py tests/test_fifo.py tests/test_lfu.py tests/test_lru.py tests/test_rr.py tests/test_ttl.py tests/test_tlru.py`.",
+      "protected_paths": [
+        "conftest.py",
+        "tests/__init__.py",
+        "tests/test_cache.py",
+        "tests/test_fifo.py",
+        "tests/test_lfu.py",
+        "tests/test_lru.py",
+        "tests/test_rr.py",
+        "tests/test_ttl.py",
+        "tests/test_tlru.py",
+        "LICENSE",
+        "UPSTREAM.md"
+      ],
+      "provenance": {
+        "commit": "13bb86a55e36e501cf0b3e4c35db516ed9409fd7",
+        "issue": "https://github.com/tkem/cachetools/pull/408",
+        "license": "MIT",
+        "repository": "https://github.com/tkem/cachetools"
+      },
+      "tags": [
+        "python",
+        "real-repository",
+        "bugfix",
+        "cache-invariant",
+        "failure-diagnosis",
+        "error-recovery"
+      ],
+      "timeout_seconds": 420
+    },
+    {
+      "checks": [
+        {
+          "argv": [
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "-o",
+            "addopts=",
+            "tests/test_more.py",
+            "-k",
+            "GrayProductTests or PartialProductTests"
+          ],
+          "timeout_seconds": 60
+        }
+      ],
+      "expected_change_paths": [
+        "more_itertools/more.py"
+      ],
+      "fixture": "tier2/tasks/more-itertools-repeat-iterators",
+      "hidden_checks": [
+        {
+          "path": "tier2/hidden/more-itertools-repeat-iterators.py",
+          "timeout_seconds": 15
+        }
+      ],
+      "id": "more-itertools-repeat-iterators",
+      "prompt": "Fix the iterator-repeat regression described in upstream PR #1125. `gray_product` and `partial_product` must produce the same results for one-shot iterator arguments as for reusable iterable arguments when repeat is greater than one. Preserve behavior for repeat=1 and ordinary sequences, update both affected implementations, and keep the change focused. Run `python -m pytest -q -o addopts= tests/test_more.py -k 'GrayProductTests or PartialProductTests'`.",
+      "protected_paths": [
+        "tests/test_more.py",
+        "LICENSE",
+        "UPSTREAM.md"
+      ],
+      "provenance": {
+        "commit": "fdbd43c569feb4388302ddee0551d18edd39fadc",
+        "issue": "https://github.com/more-itertools/more-itertools/pull/1125",
+        "license": "MIT",
+        "repository": "https://github.com/more-itertools/more-itertools"
+      },
+      "tags": [
+        "python",
+        "real-repository",
+        "bugfix",
+        "iterator-semantics",
+        "multi-location-edit",
+        "long-context"
+      ],
+      "timeout_seconds": 420
+    }
+  ],
+  "tier": "tier2"
+}
