@@ -97,6 +97,17 @@ def _relative_artifact(root: Path, value: Any, field: str) -> Path:
 def _audit_trace(trace_path: Path, record: dict) -> dict[str, Any]:
     events = load_trace(trace_path)
     replay = replay_trace(trace_path)
+    event_counts = {
+        event_name: sum(
+            event.get("event") == event_name for event in events
+        )
+        for event_name in (
+            "empty_response_retry",
+            "empty_response_exhausted",
+            "stagnation_recovery",
+            "stagnation_exhausted",
+        )
+    }
     protocol_checks = [
         bool((event.get("data") or {}).get("protocol_valid"))
         for event in events
@@ -147,6 +158,7 @@ def _audit_trace(trace_path: Path, record: dict) -> dict[str, Any]:
         "context_protocol_violations": sum(
             not valid for valid in protocol_checks
         ),
+        **event_counts,
     }
 
 

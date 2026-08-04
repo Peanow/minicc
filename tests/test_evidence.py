@@ -237,6 +237,48 @@ def test_export_evidence_includes_compaction_protocol_audit(tmp_path):
     audit = exported["artifact_hashes"]["trace"]
     assert audit["context_protocol_checks"] == 1
     assert audit["context_protocol_violations"] == 1
+    assert audit["empty_response_retry"] == 0
+    assert audit["stagnation_recovery"] == 0
+
+
+def test_export_evidence_includes_runtime_recovery_audit(tmp_path):
+    evaluation = _build_evaluation(tmp_path)
+    trace_path = evaluation / "cases" / "case-1" / "trace.jsonl"
+    events = [
+        json.loads(line)
+        for line in trace_path.read_text().splitlines()
+    ]
+    events[3:3] = [
+        {
+            "schema_version": 1,
+            "run_id": "run-1",
+            "sequence": 4,
+            "timestamp": "2026-01-01T00:00:00+00:00",
+            "event": "empty_response_retry",
+            "data": {"attempt": 1},
+        },
+        {
+            "schema_version": 1,
+            "run_id": "run-1",
+            "sequence": 5,
+            "timestamp": "2026-01-01T00:00:01+00:00",
+            "event": "stagnation_recovery",
+            "data": {"attempt": 1},
+        },
+    ]
+    trace_path.write_text(
+        "".join(json.dumps(event) + "\n" for event in events)
+    )
+
+    output = tmp_path / "evidence"
+    export_evidence(evaluation, output)
+
+    exported = json.loads((output / "results.jsonl").read_text())
+    audit = exported["artifact_hashes"]["trace"]
+    assert audit["empty_response_retry"] == 1
+    assert audit["empty_response_exhausted"] == 0
+    assert audit["stagnation_recovery"] == 1
+    assert audit["stagnation_exhausted"] == 0
 
 
 def test_evidence_cli(tmp_path, monkeypatch, capsys):
