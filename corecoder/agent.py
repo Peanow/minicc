@@ -47,6 +47,7 @@ class Agent:
         tools: list[Tool] | None = None,
         max_context_tokens: int = 128_000,
         max_rounds: int = 50,
+        max_empty_response_retries: int = 2,
         skills: list[Skill] | None = None,
         hooks: HookConfig | None = None,
         embedding: EmbeddingService | None = None,
@@ -76,6 +77,9 @@ class Agent:
             )
         )
         self.max_rounds = max_rounds
+        if max_empty_response_retries < 0:
+            raise ValueError("max_empty_response_retries must be non-negative")
+        self.max_empty_response_retries = max_empty_response_retries
         self._last_status = "idle"
         self._closed = False
 
@@ -290,6 +294,7 @@ class Agent:
             model=self.llm.model,
             user_input=user_input,
             max_rounds=self.max_rounds,
+            max_empty_response_retries=self.max_empty_response_retries,
             tools=[tool.name for tool in self.tools],
             instruction_sources=[{
                 "path": str(source.path),
@@ -310,6 +315,7 @@ class Agent:
 
         self._maybe_compress()
 
+        empty_response_retries = 0
         for round_index in range(self.max_rounds):
             llm_started = time.perf_counter()
             full_messages = self._full_messages()
@@ -348,6 +354,46 @@ class Agent:
 
             # no tool calls -> LLM is done, return text
             if not resp.tool_calls:
+                if not (resp.content or "").strip():
+                    if empty_response_retries < self.max_empty_response_retries:
+                        empty_response_retries += 1
+                        recovery_message = (
+                            "[Runtime recovery] Your previous response was empty. "
+                            "Continue the task: inspect or edit with tools if work "
+                            "remains, otherwise return a concise final answer."
+                        )
+                        self.messages.append({
+                            "role": "user",
+                            "content": recovery_message,
+                        })
+                        self.trace.emit(
+                            "empty_response_retry",
+                            round=round_index,
+                            attempt=empty_response_retries,
+                            max_retries=self.max_empty_response_retries,
+                        )
+                        self._maybe_compress()
+                        continue
+
+                    answer = (
+                        "(model returned empty responses and exhausted runtime "
+                        "recovery retries)"
+                    )
+                    self.hooks.run(HookEvent.Stop, reason="empty_response")
+                    self._last_status = "empty_response"
+                    self.trace.emit(
+                        "empty_response_exhausted",
+                        round=round_index,
+                        attempts=empty_response_retries,
+                    )
+                    self.trace.emit(
+                        "run_finished",
+                        status=self._last_status,
+                        changed_files=sorted(self.changed_files),
+                        final_answer=answer,
+                    )
+                    return answer
+
                 self.messages.append(resp.message)
                 # ── Stop hooks ──
                 self.hooks.run(HookEvent.Stop, reason="done")
@@ -361,6 +407,7 @@ class Agent:
                 return resp.content
 
             # tool calls -> execute
+            empty_response_retries = 0
             self.messages.append(resp.message)
 
             if len(resp.tool_calls) == 1:

@@ -66,6 +66,27 @@ class FakeLLM:
         return response
 
 
+class EmptyThenDoneLLM:
+    model = "empty-then-done"
+    total_prompt_tokens = 0
+    total_completion_tokens = 0
+    estimated_cost = None
+
+    def __init__(self, always_empty=False):
+        self.always_empty = always_empty
+        self.calls = 0
+        self.requests = []
+
+    def chat(self, **kwargs):
+        self.calls += 1
+        self.requests.append(kwargs["messages"])
+        self.total_prompt_tokens += 5
+        self.total_completion_tokens += 1
+        if self.always_empty or self.calls == 1:
+            return LLMResponse(content="", prompt_tokens=5, completion_tokens=1)
+        return LLMResponse(content="done", prompt_tokens=5, completion_tokens=1)
+
+
 def test_tool_registry_rejects_duplicates():
     with pytest.raises(ValueError, match="duplicate tool name"):
         ToolRegistry([EchoTool(), EchoTool()])
@@ -122,6 +143,48 @@ def test_workspace_validation_allowance_is_visible_in_trace():
     )
     assert policy_event["data"]["decision"] == "allow"
     assert policy_event["data"]["risk"] == "workspace-validation"
+
+
+def test_agent_retries_empty_model_response_with_trace_event():
+    llm = EmptyThenDoneLLM()
+    trace = InMemoryTraceSink()
+    agent = Agent(llm=llm, tools=[], trace=trace)
+
+    result = agent.run("finish the task")
+
+    assert result.status == "completed"
+    assert result.final_answer == "done"
+    assert llm.calls == 2
+    assert "[Runtime recovery]" in llm.requests[1][-1]["content"]
+    retry = next(
+        event for event in trace.events
+        if event["event"] == "empty_response_retry"
+    )
+    assert retry["data"] == {"round": 0, "attempt": 1, "max_retries": 2}
+
+
+def test_agent_marks_exhausted_empty_responses_as_failure():
+    llm = EmptyThenDoneLLM(always_empty=True)
+    trace = InMemoryTraceSink()
+    agent = Agent(
+        llm=llm,
+        tools=[],
+        trace=trace,
+        max_empty_response_retries=1,
+    )
+
+    result = agent.run("finish the task")
+
+    assert result.status == "empty_response"
+    assert llm.calls == 2
+    assert any(
+        event["event"] == "empty_response_exhausted"
+        for event in trace.events
+    )
+    finished = next(
+        event for event in trace.events if event["event"] == "run_finished"
+    )
+    assert finished["data"]["status"] == "empty_response"
 
 
 def test_jsonl_trace_is_append_only_and_redacted(tmp_path):
