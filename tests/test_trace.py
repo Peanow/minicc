@@ -87,6 +87,29 @@ class EmptyThenDoneLLM:
         return LLMResponse(content="done", prompt_tokens=5, completion_tokens=1)
 
 
+class StagnantLLM:
+    model = "stagnant"
+    total_prompt_tokens = 0
+    total_completion_tokens = 0
+    estimated_cost = None
+
+    def __init__(self, finish_after=None):
+        self.finish_after = finish_after
+        self.calls = 0
+        self.requests = []
+
+    def chat(self, **kwargs):
+        self.calls += 1
+        self.requests.append(kwargs["messages"])
+        if self.finish_after is not None and self.calls > self.finish_after:
+            return LLMResponse(content="done")
+        return LLMResponse(tool_calls=[ToolCall(
+            id=f"read-{self.calls}",
+            name="echo",
+            arguments={"text": "still inspecting"},
+        )])
+
+
 def test_tool_registry_rejects_duplicates():
     with pytest.raises(ValueError, match="duplicate tool name"):
         ToolRegistry([EchoTool(), EchoTool()])
@@ -185,6 +208,54 @@ def test_agent_marks_exhausted_empty_responses_as_failure():
         event for event in trace.events if event["event"] == "run_finished"
     )
     assert finished["data"]["status"] == "empty_response"
+
+
+def test_agent_recovers_from_read_only_stagnation_with_trace_event():
+    llm = StagnantLLM(finish_after=2)
+    trace = InMemoryTraceSink()
+    agent = Agent(
+        llm=llm,
+        tools=[EchoTool()],
+        trace=trace,
+        max_stagnation_rounds=2,
+    )
+
+    result = agent.run("make a focused change")
+
+    assert result.status == "completed"
+    assert "[Runtime recovery]" in llm.requests[2][-1]["content"]
+    recovery = next(
+        event for event in trace.events
+        if event["event"] == "stagnation_recovery"
+    )
+    assert recovery["data"]["stagnant_rounds"] == 2
+
+
+def test_agent_stops_after_stagnation_recovery_is_exhausted():
+    llm = StagnantLLM()
+    trace = InMemoryTraceSink()
+    agent = Agent(
+        llm=llm,
+        tools=[EchoTool()],
+        trace=trace,
+        max_rounds=10,
+        max_stagnation_rounds=2,
+        max_stagnation_retries=1,
+    )
+
+    result = agent.run("make a focused change")
+
+    assert result.status == "stalled"
+    assert llm.calls == 4
+    exhausted = next(
+        event for event in trace.events
+        if event["event"] == "stagnation_exhausted"
+    )
+    assert exhausted["data"]["attempts"] == 1
+    finished = next(
+        event for event in trace.events if event["event"] == "run_finished"
+    )
+    assert finished["data"]["status"] == "stalled"
 
 
 def test_jsonl_trace_is_append_only_and_redacted(tmp_path):

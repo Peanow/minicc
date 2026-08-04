@@ -48,6 +48,8 @@ class Agent:
         max_context_tokens: int = 128_000,
         max_rounds: int = 50,
         max_empty_response_retries: int = 2,
+        max_stagnation_rounds: int = 12,
+        max_stagnation_retries: int = 1,
         skills: list[Skill] | None = None,
         hooks: HookConfig | None = None,
         embedding: EmbeddingService | None = None,
@@ -80,6 +82,12 @@ class Agent:
         if max_empty_response_retries < 0:
             raise ValueError("max_empty_response_retries must be non-negative")
         self.max_empty_response_retries = max_empty_response_retries
+        if max_stagnation_rounds <= 0:
+            raise ValueError("max_stagnation_rounds must be positive")
+        if max_stagnation_retries < 0:
+            raise ValueError("max_stagnation_retries must be non-negative")
+        self.max_stagnation_rounds = max_stagnation_rounds
+        self.max_stagnation_retries = max_stagnation_retries
         self._last_status = "idle"
         self._closed = False
 
@@ -295,6 +303,8 @@ class Agent:
             user_input=user_input,
             max_rounds=self.max_rounds,
             max_empty_response_retries=self.max_empty_response_retries,
+            max_stagnation_rounds=self.max_stagnation_rounds,
+            max_stagnation_retries=self.max_stagnation_retries,
             tools=[tool.name for tool in self.tools],
             instruction_sources=[{
                 "path": str(source.path),
@@ -316,6 +326,8 @@ class Agent:
         self._maybe_compress()
 
         empty_response_retries = 0
+        stagnant_rounds = 0
+        stagnation_retries = 0
         for round_index in range(self.max_rounds):
             llm_started = time.perf_counter()
             full_messages = self._full_messages()
@@ -409,12 +421,14 @@ class Agent:
             # tool calls -> execute
             empty_response_retries = 0
             self.messages.append(resp.message)
+            round_results: list[str]
 
             if len(resp.tool_calls) == 1:
                 tc = resp.tool_calls[0]
                 if on_tool:
                     on_tool(tc.name, tc.arguments)
                 result = self._exec_tool(tc, round_index=round_index)
+                round_results = [result]
                 self.trace.emit(
                     "tool_result",
                     tool_call_id=tc.id,
@@ -433,6 +447,7 @@ class Agent:
                     on_tool,
                     round_index=round_index,
                 )
+                round_results = results
                 for tc, result in zip(resp.tool_calls, results):
                     self.trace.emit(
                         "tool_result",
@@ -446,6 +461,60 @@ class Agent:
                         "tool_call_id": tc.id,
                         "content": result,
                     })
+
+            made_write_progress = any(
+                tool_call.name in {"write_file", "edit_file"}
+                and not result.lstrip().startswith(("Error", "Blocked"))
+                for tool_call, result in zip(resp.tool_calls, round_results)
+            )
+            if made_write_progress:
+                stagnant_rounds = 0
+                stagnation_retries = 0
+            else:
+                stagnant_rounds += 1
+
+            if stagnant_rounds >= self.max_stagnation_rounds:
+                if stagnation_retries < self.max_stagnation_retries:
+                    stagnation_retries += 1
+                    self.messages.append({
+                        "role": "user",
+                        "content": (
+                            "[Runtime recovery] You have spent several rounds "
+                            "using tools without making a source edit. Summarize "
+                            "the evidence already collected, then make the smallest "
+                            "focused edit that addresses the task. If editing is "
+                            "not justified, return a concise blocker instead of "
+                            "continuing to probe."
+                        ),
+                    })
+                    self.trace.emit(
+                        "stagnation_recovery",
+                        round=round_index,
+                        attempt=stagnation_retries,
+                        stagnant_rounds=stagnant_rounds,
+                        max_retries=self.max_stagnation_retries,
+                    )
+                    stagnant_rounds = 0
+                else:
+                    answer = (
+                        "(agent stalled without making a source edit after "
+                        "runtime recovery)"
+                    )
+                    self.hooks.run(HookEvent.Stop, reason="stalled")
+                    self._last_status = "stalled"
+                    self.trace.emit(
+                        "stagnation_exhausted",
+                        round=round_index,
+                        stagnant_rounds=stagnant_rounds,
+                        attempts=stagnation_retries,
+                    )
+                    self.trace.emit(
+                        "run_finished",
+                        status=self._last_status,
+                        changed_files=sorted(self.changed_files),
+                        final_answer=answer,
+                    )
+                    return answer
 
             self._maybe_compress()
 

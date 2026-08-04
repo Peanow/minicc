@@ -13,6 +13,7 @@
 - [x] SQLite 单库存储文本与可选 embedding
 - [x] JSONL Trace、脱敏和结构化 `RunResult`
 - [x] 空模型响应有限重试、显式失败状态与 Trace 事件
+- [x] 无编辑工具循环的停滞检测、有限恢复与成本熔断
 - [x] 每任务 OTel Trace、Phoenix 本地部署与 REPL 一键观测入口
 - [x] Clean install 与全量测试基线
 
