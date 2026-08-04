@@ -10,8 +10,11 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from prompt_toolkit import prompt as pt_prompt
+from prompt_toolkit.application import get_app
+from prompt_toolkit.formatted_text import FormattedText
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.mouse_events import MouseEventType
 
 from .agent import Agent
 from .llm import LLM, LiteLLM
@@ -23,7 +26,12 @@ from .tools.skill import SkillTool
 from .memory import MemoryStore, get_project_name, format_memory_context
 from .embedding import EmbeddingService
 from .prompt import system_prompt
-from .trace import JsonlTraceSink
+from .trace import CompositeTraceSink, JsonlTraceSink, OpenTelemetryTraceSink
+from .observability import (
+    ObservabilityConfig,
+    ObservabilityError,
+    PhoenixManager,
+)
 from .policy import ExecutionPolicy, PermissionMode
 from .context import create_context_strategy
 from .tokenizer import create_token_counter
@@ -37,6 +45,60 @@ from . import __version__
 console = Console()
 
 
+def _run_observe_command(action: str):
+    try:
+        from .config import _load_dotenv
+
+        _load_dotenv()
+        config = ObservabilityConfig.from_env()
+        manager = PhoenixManager(config)
+        if action == "status":
+            if manager.is_healthy():
+                console.print(f"[green]Phoenix is running:[/green] {config.ui_url}")
+            else:
+                console.print("[yellow]Phoenix is not running.[/yellow]")
+                sys.exit(1)
+        elif action == "down":
+            manager.down()
+            console.print("[green]Phoenix stopped; trace data was preserved.[/green]")
+        elif action == "up":
+            started = manager.up()
+            label = "started" if started else "already running"
+            console.print(f"[green]Phoenix {label}:[/green] {config.ui_url}")
+        else:
+            opened = manager.open()
+            console.print(f"[green]Phoenix ready:[/green] {config.ui_url}")
+            if not opened:
+                console.print("[yellow]Browser could not be opened; use the URL above.[/yellow]")
+    except (ObservabilityError, ValueError) as exc:
+        console.print(f"[red]Observability error:[/red] {exc}")
+        sys.exit(2)
+
+
+def _enable_observability(
+    agent: Agent,
+    manager: PhoenixManager,
+    open_browser: bool = True,
+) -> bool:
+    """Start Phoenix and attach one OTLP sink for subsequent agent runs."""
+    try:
+        opened = manager.open() if open_browser else True
+        if not open_browser:
+            manager.up()
+        trace = agent.trace
+        if not isinstance(trace, CompositeTraceSink):
+            raise ObservabilityError("The active Agent trace sink cannot be extended.")
+        if not any(isinstance(sink, OpenTelemetryTraceSink) for sink in trace.sinks):
+            trace.add_sink(manager.create_trace_sink(trace.session_id))
+        console.print(f"[green]Observability ready:[/green] {manager.config.ui_url}")
+        if open_browser and not opened:
+            console.print("[yellow]Browser could not be opened; use the URL above.[/yellow]")
+        return True
+    except (ObservabilityError, RuntimeError) as exc:
+        console.print(f"[red]Observability unavailable:[/red] {exc}")
+        return False
+
+
 def _parse_args():
     p = argparse.ArgumentParser(
         prog="corecoder",
@@ -48,6 +110,11 @@ def _parse_args():
     p.add_argument("-p", "--prompt", help="One-shot prompt (non-interactive mode)")
     p.add_argument("-r", "--resume", metavar="ID", help="Resume a saved session")
     p.add_argument("--trace", metavar="PATH", help="Write a structured JSONL execution trace")
+    p.add_argument(
+        "--observe",
+        action="store_true",
+        help="Start local Phoenix and export this session over OTLP",
+    )
     p.add_argument(
         "--permission-mode",
         choices=[mode.value for mode in PermissionMode],
@@ -114,12 +181,23 @@ def _parse_args():
     )
     evidence_parser.add_argument("evaluation_dir")
     evidence_parser.add_argument("-o", "--output", required=True)
+    observe_parser = subcommands.add_parser(
+        "observe",
+        help="Manage the local Phoenix observability platform",
+    )
+    observe_parser.add_argument(
+        "action",
+        choices=["up", "open", "status", "down"],
+    )
     p.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
     return p.parse_args()
 
 
 def main():
     args = _parse_args()
+    if args.command == "observe":
+        _run_observe_command(args.action)
+        return
     if args.command == "replay":
         try:
             summary = replay_trace(args.trace_path)
@@ -285,7 +363,29 @@ def main():
         base_url=config.base_url,
     )
 
-    trace = JsonlTraceSink(args.trace) if args.trace else None
+    trace_sinks = [JsonlTraceSink(args.trace)] if args.trace else []
+    trace = CompositeTraceSink(trace_sinks)
+    try:
+        observability = ObservabilityConfig.from_env()
+    except ValueError as exc:
+        console.print(f"[red]Invalid observability configuration:[/red] {exc}")
+        sys.exit(2)
+    manager = PhoenixManager(observability)
+    if args.observe:
+        try:
+            manager.up()
+            console.print(
+                f"[green]Observability ready:[/green] {observability.ui_url}"
+            )
+        except (ObservabilityError, RuntimeError) as exc:
+            console.print(f"[red]Observability unavailable:[/red] {exc}")
+            sys.exit(2)
+    if args.observe or observability.backend == "otel":
+        try:
+            trace.add_sink(manager.create_trace_sink(trace.session_id))
+        except RuntimeError as exc:
+            console.print(f"[red]Observability unavailable:[/red] {exc}")
+            sys.exit(2)
     approval_callback = None if args.prompt else _approve_tool
     policy = ExecutionPolicy(
         mode=config.permission_mode,
@@ -340,7 +440,7 @@ def main():
 
     # interactive REPL
     try:
-        _repl(agent, config)
+        _repl(agent, config, manager)
     finally:
         agent.close()
         agent.trace.close()
@@ -377,7 +477,7 @@ def _refresh_context_for_model(agent: Agent, config: Config):
     )
 
 
-def _repl(agent: Agent, config: Config):
+def _repl(agent: Agent, config: Config, manager: PhoenixManager):
     """Interactive read-eval-print loop."""
     console.print(Panel(
         f"[bold]CoreCoder[/bold] v{__version__}\n"
@@ -401,6 +501,24 @@ def _repl(agent: Agent, config: Config):
     def _newline(event):
         event.current_buffer.insert_text("\n")
 
+    @kb.add("f2")
+    def _open_observability(event):
+        event.current_buffer.text = "/observe"
+        event.current_buffer.validate_and_handle()
+
+    def _toolbar_click(mouse_event):
+        if mouse_event.event_type == MouseEventType.MOUSE_UP:
+            app = get_app()
+            app.current_buffer.text = "/observe"
+            app.current_buffer.validate_and_handle()
+
+    def _bottom_toolbar():
+        state = "ON" if manager.is_healthy(timeout=0.1) else "OFF"
+        style = "class:observe-on" if state == "ON" else "class:observe-off"
+        return FormattedText([
+            (style, f" [ Observability: {state} · click or F2 ] ", _toolbar_click),
+        ])
+
     while True:
         try:
             user_input = pt_prompt(
@@ -409,6 +527,8 @@ def _repl(agent: Agent, config: Config):
                 multiline=True,
                 key_bindings=kb,
                 prompt_continuation="...  ",
+                bottom_toolbar=_bottom_toolbar,
+                mouse_support=True,
             ).strip()
         except (EOFError, KeyboardInterrupt):
             console.print("\nBye!")
@@ -422,6 +542,9 @@ def _repl(agent: Agent, config: Config):
             break
         if user_input == "/help":
             _show_help()
+            continue
+        if user_input == "/observe":
+            _enable_observability(agent, manager, open_browser=True)
             continue
         if user_input == "/reset":
             agent.reset()
@@ -585,11 +708,13 @@ def _show_help():
         "  /memory search <query>  Search memory\n"
         "  /memory save <text>     Save a manual memory\n"
         "  /memory clear           Clear all memories for this project\n"
+        "  /observe       Start/open local Phoenix observability\n"
         "  quit           Exit CoreCoder\n"
         "\n"
         "[bold]Input:[/bold]\n"
         "  Enter          Submit message\n"
-        "  Esc+Enter      Insert newline (for pasting code)",
+        "  Esc+Enter      Insert newline (for pasting code)\n"
+        "  F2             Start/open local observability",
         title="CoreCoder Help",
         border_style="dim",
     ))

@@ -1,0 +1,15 @@
+services:
+  phoenix:
+    image: ${CORECODER_PHOENIX_IMAGE:-registry-1.docker.io/arizephoenix/phoenix:version-17.5.0}
+    ports:
+      - "127.0.0.1:6006:6006"
+    environment:
+      PHOENIX_WORKING_DIR: /mnt/data
+      PHOENIX_TELEMETRY_ENABLED: "false"
+      PHOENIX_ALLOW_EXTERNAL_RESOURCES: "false"
+    volumes:
+      - phoenix_data:/mnt/data
+    restart: unless-stopped
+
+volumes:
+  phoenix_data:

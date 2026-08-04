@@ -254,7 +254,36 @@ class Agent:
         )
 
     def chat(self, user_input: str, on_token=None, on_tool=None) -> str:
-        """Process one user message. May involve multiple LLM/tool rounds."""
+        """Process one user task inside a complete, independently identified run."""
+        self.trace.begin_run()
+        try:
+            answer = self._chat_impl(user_input, on_token=on_token, on_tool=on_tool)
+        except KeyboardInterrupt:
+            self._last_status = "cancelled"
+            self.trace.emit(
+                "run_finished",
+                status=self._last_status,
+                changed_files=sorted(self.changed_files),
+                error_type="KeyboardInterrupt",
+            )
+            self.trace.end_run(self._last_status)
+            raise
+        except Exception as exc:
+            self._last_status = "error"
+            self.trace.emit(
+                "run_finished",
+                status=self._last_status,
+                changed_files=sorted(self.changed_files),
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            self.trace.end_run(self._last_status)
+            raise
+        self.trace.end_run(self._last_status)
+        return answer
+
+    def _chat_impl(self, user_input: str, on_token=None, on_tool=None) -> str:
+        """Execute the agent loop after the trace lifecycle has been opened."""
         self._last_status = "running"
         self.trace.emit(
             "run_started",
@@ -288,7 +317,10 @@ class Agent:
             self.trace.emit(
                 "llm_started",
                 round=round_index,
+                model=self.llm.model,
                 message_count=len(self.messages),
+                messages=full_messages,
+                tool_definitions=tool_schemas,
                 request_fingerprint=request_fingerprint(
                     full_messages,
                     tool_schemas,
@@ -324,6 +356,7 @@ class Agent:
                     "run_finished",
                     status=self._last_status,
                     changed_files=sorted(self.changed_files),
+                    final_answer=resp.content,
                 )
                 return resp.content
 
@@ -334,11 +367,12 @@ class Agent:
                 tc = resp.tool_calls[0]
                 if on_tool:
                     on_tool(tc.name, tc.arguments)
-                result = self._exec_tool(tc)
+                result = self._exec_tool(tc, round_index=round_index)
                 self.trace.emit(
                     "tool_result",
                     tool_call_id=tc.id,
                     tool=tc.name,
+                    round=round_index,
                     content=result,
                 )
                 self.messages.append({
@@ -347,12 +381,17 @@ class Agent:
                     "content": result,
                 })
             else:
-                results = self._exec_tools_parallel(resp.tool_calls, on_tool)
+                results = self._exec_tools_parallel(
+                    resp.tool_calls,
+                    on_tool,
+                    round_index=round_index,
+                )
                 for tc, result in zip(resp.tool_calls, results):
                     self.trace.emit(
                         "tool_result",
                         tool_call_id=tc.id,
                         tool=tc.name,
+                        round=round_index,
                         content=result,
                     )
                     self.messages.append({
@@ -369,6 +408,7 @@ class Agent:
             "run_finished",
             status=self._last_status,
             changed_files=sorted(self.changed_files),
+            final_answer="(reached maximum tool-call rounds)",
         )
         return "(reached maximum tool-call rounds)"
 
@@ -419,11 +459,17 @@ class Agent:
             count=result.data if isinstance(result.data, int) else 0,
         )
 
-    def _exec_tool(self, tc) -> str:
+    def _exec_tool(self, tc, round_index: int | None = None) -> str:
         """Execute a single tool call, returning the result string."""
         tool = self.tool_registry.get(tc.name)
         if tool is None:
-            self.trace.emit("tool_rejected", tool=tc.name, reason="unknown tool")
+            self.trace.emit(
+                "tool_rejected",
+                tool_call_id=tc.id,
+                tool=tc.name,
+                round=round_index,
+                reason="unknown tool",
+            )
             return f"Error: unknown tool '{tc.name}'"
 
         # ── PreToolUse hooks ──
@@ -433,7 +479,9 @@ class Agent:
         if pre.blocked:
             self.trace.emit(
                 "policy_decision",
+                tool_call_id=tc.id,
                 tool=tc.name,
+                round=round_index,
                 decision="deny",
                 reason=pre.message,
             )
@@ -444,7 +492,9 @@ class Agent:
         policy = self.policy.authorize(tc.name, tc.arguments)
         self.trace.emit(
             "policy_decision",
+            tool_call_id=tc.id,
             tool=tc.name,
+            round=round_index,
             decision=policy.decision.value,
             reason=policy.reason,
             risk=policy.risk.value,
@@ -454,7 +504,13 @@ class Agent:
 
         # ── Execute ──
         started = time.perf_counter()
-        self.trace.emit("tool_started", tool=tc.name, arguments=tc.arguments)
+        self.trace.emit(
+            "tool_started",
+            tool_call_id=tc.id,
+            tool=tc.name,
+            round=round_index,
+            arguments=tc.arguments,
+        )
         try:
             output = tool.execute(**tc.arguments)
         except TypeError as e:
@@ -472,13 +528,20 @@ class Agent:
 
         self.trace.emit(
             "tool_finished",
+            tool_call_id=tc.id,
             tool=tc.name,
+            round=round_index,
             duration_ms=round((time.perf_counter() - started) * 1000, 2),
             output=output,
         )
         return output
 
-    def _exec_tools_parallel(self, tool_calls, on_tool=None) -> list[str]:
+    def _exec_tools_parallel(
+        self,
+        tool_calls,
+        on_tool=None,
+        round_index: int | None = None,
+    ) -> list[str]:
         """Run read-only calls concurrently and side effects sequentially."""
         for tc in tool_calls:
             if on_tool:
@@ -486,10 +549,13 @@ class Agent:
 
         tools = [self.tool_registry.get(tc.name) for tc in tool_calls]
         if not all(tool and tool.parallel_safe for tool in tools):
-            return [self._exec_tool(tc) for tc in tool_calls]
+            return [self._exec_tool(tc, round_index=round_index) for tc in tool_calls]
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
-            futures = [pool.submit(self._exec_tool, tc) for tc in tool_calls]
+            futures = [
+                pool.submit(self._exec_tool, tc, round_index)
+                for tc in tool_calls
+            ]
             return [f.result() for f in futures]
 
     def reset(self):

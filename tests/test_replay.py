@@ -107,6 +107,31 @@ def test_replay_summary_is_json_serializable(tmp_path):
     assert "run-123" in encoded
 
 
+def test_replay_uses_latest_run_in_an_interactive_session(tmp_path):
+    path = tmp_path / "session.jsonl"
+    sink = JsonlTraceSink(path, run_id="first", session_id="session-1")
+    sink.begin_run()
+    sink.emit("run_started")
+    sink.emit("run_finished", status="completed")
+    sink.begin_run("second")
+    sink.emit("run_started")
+    sink.emit("llm_started", round=0)
+    sink.emit(
+        "llm_finished",
+        round=0,
+        prompt_tokens=3,
+        completion_tokens=2,
+        tool_calls=[],
+    )
+    sink.emit("run_finished", status="completed")
+    sink.close()
+
+    summary = replay_trace(path)
+    assert summary.valid
+    assert summary.run_id == "second"
+    assert summary.llm_calls == 1
+
+
 def test_replay_cli_does_not_require_api_configuration(tmp_path, monkeypatch, capsys):
     from corecoder.cli import main
 

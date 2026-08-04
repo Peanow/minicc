@@ -148,6 +148,34 @@ Replay 不调用模型、也不重新执行工具，只校验 LLM/工具/Run 生
 重建调用数、token、耗时、状态和修改文件摘要。HTML 报告是无外部资源的单文件，
 可以直接用于调试或项目演示；工具输出会经过 HTML 转义。
 
+## 本地 Phoenix 可观测平台
+
+安装可选的 OpenTelemetry 导出依赖后，可以直接管理项目随附的 Phoenix：
+
+```bash
+pip install "corecoder[observability]"
+corecoder observe up       # 启动，不打开浏览器
+corecoder observe open     # 必要时启动并打开 http://127.0.0.1:6006
+corecoder --observe        # 启动 Phoenix，并导出本次 Agent 会话
+corecoder observe down     # 停止服务，保留 Docker 数据卷
+```
+
+交互式 REPL 底部提供 `Observability` 按钮，也可以按 `F2` 或输入 `/observe`。
+三种入口都会在需要时启动 Phoenix、为后续任务挂载 OTLP exporter 并打开界面。
+每个用户任务对应一条 Trace，模型轮次和工具调用是子 Span，工具调用通过
+`tool_call_id` 精确关联。
+
+仓库中的 `source dev.sh` 默认等价于使用 `corecoder --observe` 启动，因此从第一条
+任务开始就会导出 Trace。直接执行裸 `corecoder` 时，必须先按 `F2`、输入
+`/observe`，或设置 `CORECODER_OBSERVABILITY=otel`，否则只会运行 Agent，不会导出
+到 Phoenix。
+
+Phoenix 只监听本机回环地址，数据写入 Docker 命名卷，并关闭 Phoenix 自身遥测和
+外部 UI 资源。正文在导出前会脱敏和截断；默认完整记录本地 Prompt、回答和工具
+输入输出，设置 `CORECODER_TRACE_CONTENT=metadata-only` 可只保留元数据。若设置
+`CORECODER_OBSERVABILITY=otel` 与 `CORECODER_OTLP_ENDPOINT`，也可将相同埋点导出
+到任意 OTLP/HTTP 后端，而无需启动随附的 Phoenix。
+
 Trace 还会为每轮模型请求记录规范化指纹。Runtime Replay 不调用 API，而是把已录制
 响应重新送入一个新的 Agent，在复制出的 fixture 中执行受支持的文件工具：
 

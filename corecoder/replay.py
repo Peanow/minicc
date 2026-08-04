@@ -56,6 +56,20 @@ def replay_trace(path: str | Path) -> ReplaySummary:
     Replay never calls a model and never executes a tool.
     """
     events = load_trace(path)
+    # Interactive sessions may append multiple independently valid task runs to
+    # one JSONL file. Preserve the single-summary API by replaying the latest
+    # task; older files containing exactly one run behave identically.
+    started_run_ids = [
+        str(event.get("run_id", ""))
+        for event in events
+        if event.get("event") == "run_started" and event.get("run_id")
+    ]
+    if len(set(started_run_ids)) > 1:
+        selected_run_id = started_run_ids[-1]
+        events = [
+            event for event in events
+            if str(event.get("run_id", "")) == selected_run_id
+        ]
     run_ids = {str(event.get("run_id", "")) for event in events}
     errors: list[str] = []
     if len(run_ids) != 1:
@@ -169,6 +183,10 @@ def generate_html_report(
     """Generate a dependency-free, self-contained single-run report."""
     events = load_trace(trace_path)
     summary = replay_trace(trace_path)
+    events = [
+        event for event in events
+        if str(event.get("run_id", "")) == summary.run_id
+    ]
     output = Path(output_path).expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
 

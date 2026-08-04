@@ -14,11 +14,12 @@ cd "$SCRIPT_DIR"
 # 激活虚拟环境
 source .venv/bin/activate
 
-# 安装最新版（静默模式）
-pip install -e . -q
+# 安装最新版与本地观测依赖（uv 创建的虚拟环境不一定包含 pip）
+uv pip install --python "$SCRIPT_DIR/.venv/bin/python" -e '.[observability]' -q
 
 # 进入 workspace 验证目录
 cd workspace
 
-# 启动 corecoder（模型与端点从 .env 读取）
-corecoder
+# 启动 CoreCoder 并在 Agent 创建前挂载本地 OTLP exporter。
+# 仅安装 observability 依赖并不会自动启用 Trace 导出。
+corecoder --observe

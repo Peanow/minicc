@@ -12,6 +12,7 @@
 - [x] 只并行执行显式标记为安全的只读工具
 - [x] SQLite 单库存储文本与可选 embedding
 - [x] JSONL Trace、脱敏和结构化 `RunResult`
+- [x] 每任务 OTel Trace、Phoenix 本地部署与 REPL 一键观测入口
 - [x] Clean install 与全量测试基线
 
 ## Milestone 2：策略与安全

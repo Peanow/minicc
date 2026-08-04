@@ -169,6 +169,16 @@ def test_redact_nested_values():
     }
 
 
+def test_otel_attribute_serialization_has_a_total_bound():
+    from corecoder.trace import _attribute_value
+
+    value = {str(index): "x" * 1000 for index in range(100)}
+    serialized = _attribute_value(value)
+    assert isinstance(serialized, str)
+    assert len(serialized) < 12_000
+    assert "trace truncated" in serialized
+
+
 def test_context_compaction_trace_records_strategy_and_counter():
     class CharacterCounter:
         name = "characters"

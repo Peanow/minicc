@@ -61,6 +61,36 @@ Replay is side-effect free: it neither calls a model nor executes a tool. It
 validates run, LLM, tool, and result lifecycles and reconstructs aggregate
 metrics. The report is a self-contained HTML timeline with escaped tool output.
 
+## Local observability with Phoenix
+
+Install the optional OpenTelemetry exporter, then manage the bundled local
+Phoenix service with CoreCoder:
+
+```bash
+pip install "corecoder[observability]"
+corecoder observe up       # start, but do not open a browser
+corecoder observe open     # start if needed and open http://127.0.0.1:6006
+corecoder --observe        # start Phoenix and export this Agent session
+corecoder observe down     # stop while preserving the Docker volume
+```
+
+In the interactive REPL, click the bottom `Observability` button, press `F2`,
+or enter `/observe`. All three start Phoenix when necessary, attach the OTLP
+exporter for subsequent tasks, and open the UI. Each user task is a trace;
+LLM rounds and tool calls are child spans correlated by tool-call ID.
+
+The repository's `source dev.sh` starts `corecoder --observe`, so exporting is
+active before the first task. A bare `corecoder` process does not export unless
+you use F2, `/observe`, `--observe`, or set `CORECODER_OBSERVABILITY=otel`.
+
+Phoenix binds only to loopback, persists data in a named Docker volume, and has
+its own analytics and external UI resources disabled. Trace content is redacted
+and bounded before export. Full local content capture is the default; set
+`CORECODER_TRACE_CONTENT=metadata-only` to omit prompts, responses, tool inputs,
+and tool outputs. Set `CORECODER_OBSERVABILITY=otel` and
+`CORECODER_OTLP_ENDPOINT` to export to any OTLP/HTTP-compatible backend without
+starting the bundled Phoenix service.
+
 For a stronger reproducibility check, traces now include a canonical fingerprint
 of every model request. Runtime Replay feeds the recorded responses back through
 a fresh Agent and re-executes supported file tools inside a copied fixture:
