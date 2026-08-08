@@ -1,8 +1,10 @@
 # Lightweight SDD workflow
 
 CoreCoder uses a small, repository-local specification-driven development
-workflow. Markdown is the source of truth; `scripts/spec.py` only creates,
-checks, approves, and archives those documents.
+workflow. `AGENTS.md` is the only project-level AI workflow entry point;
+Markdown is the source of truth, and `scripts/spec.py` provides read-only
+validation plus the document lifecycle commands. No project-level skill is
+required.
 
 Use a change specification for user-visible behavior, public APIs, Trace
 schemas, permissions, concurrency, tools, context, memory, sessions, and
@@ -38,6 +40,8 @@ python scripts/spec.py new terminal-input
 python scripts/spec.py status 001-terminal-input
 python scripts/spec.py approve 001-terminal-input
 python scripts/spec.py check 001-terminal-input --strict
+python scripts/spec.py preflight 001-terminal-input
+python scripts/spec.py preflight 001-terminal-input --for-commit
 python scripts/spec.py archive 001-terminal-input
 ```
 
@@ -47,6 +51,13 @@ change. `--root PATH` can precede the command for tooling and isolated tests.
 `new` assigns the next numeric prefix across active and archived changes.
 Before `approve`, replace every `TBD` and `NEEDS CLARIFICATION`. Approval also
 runs strict structural validation.
+
+Run `status` before starting implementation. Run `preflight CHANGE` before
+declaring a change done; it performs strict validation and reports the inferred
+state without modifying files. `preflight CHANGE --for-commit` additionally
+requires the change to be archived. If an active change is `DONE`, archive it
+with `archive` first. Neither preflight mode commits, stages, pushes, or
+archives files.
 
 ## Inferred states
 

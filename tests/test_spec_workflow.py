@@ -270,6 +270,72 @@ def test_archive_requires_capability_evidence(tmp_path):
     assert change.is_dir()
 
 
+def test_preflight_reports_strict_validation_failure(tmp_path):
+    _initialize(tmp_path)
+    change = _write_valid_change(tmp_path)
+    tasks = change / "tasks.md"
+    tasks.write_text(
+        tasks.read_text(encoding="utf-8").replace("[R1, AC1]", "[R9, AC1]", 1),
+        encoding="utf-8",
+    )
+
+    result = _run(tmp_path, "preflight", "000-example")
+
+    assert result.returncode == 1
+    assert "Preflight FAILED 000-example\tDRAFT" in result.stderr
+    assert "T1 references unknown IDs: R9" in result.stderr
+
+
+def test_preflight_does_not_modify_specification_files(tmp_path):
+    _initialize(tmp_path)
+    change = _write_valid_change(tmp_path)
+    files = sorted(path for path in change.iterdir() if path.is_file())
+    before = {path.name: path.read_bytes() for path in files}
+
+    result = _run(tmp_path, "preflight", "000-example")
+
+    assert result.returncode == 0, result.stderr
+    assert "Preflight OK 000-example\tDRAFT" in result.stdout
+    assert {path.name: path.read_bytes() for path in files} == before
+    assert sorted(path for path in change.iterdir() if path.is_file()) == files
+
+
+def _complete_change(tmp_path):
+    change = _write_valid_change(tmp_path)
+    capability = tmp_path / "specs" / "capabilities" / "workflow.md"
+    capability.write_text("# Workflow\n\nUpdated by the test.\n", encoding="utf-8")
+    assert _run(tmp_path, "approve", "000-example").returncode == 0
+    for filename in ("tasks.md", "checklist.md"):
+        path = change / filename
+        path.write_text(
+            path.read_text(encoding="utf-8").replace("[ ]", "[x]"),
+            encoding="utf-8",
+        )
+    return change
+
+
+def test_preflight_for_commit_rejects_active_done_change(tmp_path):
+    _initialize(tmp_path)
+    _complete_change(tmp_path)
+
+    result = _run(tmp_path, "preflight", "000-example", "--for-commit")
+
+    assert result.returncode == 1
+    assert "archive it before commit" in result.stderr
+
+
+def test_preflight_for_commit_accepts_archived_change(tmp_path):
+    _initialize(tmp_path)
+    _complete_change(tmp_path)
+    archived = _run(tmp_path, "archive", "000-example")
+    assert archived.returncode == 0, archived.stderr
+
+    result = _run(tmp_path, "preflight", "000-example", "--for-commit")
+
+    assert result.returncode == 0, result.stderr
+    assert "Preflight OK 000-example\tARCHIVED" in result.stdout
+
+
 def test_repository_bootstrap_change_passes_strict_validation():
     result = _run(REPOSITORY_ROOT, "check", "000-sdd-bootstrap", "--strict")
 

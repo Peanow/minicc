@@ -488,6 +488,17 @@ def build_parser() -> argparse.ArgumentParser:
     check_parser.add_argument("change", nargs="?")
     check_parser.add_argument("--strict", action="store_true")
 
+    preflight_parser = subparsers.add_parser(
+        "preflight",
+        help="run strict validation and report whether a change is handoff-ready",
+    )
+    preflight_parser.add_argument("change")
+    preflight_parser.add_argument(
+        "--for-commit",
+        action="store_true",
+        help="require the change to already be archived",
+    )
+
     archive_parser = subparsers.add_parser("archive", help="archive a completed change")
     archive_parser.add_argument("change")
     return parser
@@ -543,6 +554,34 @@ def main(argv: Sequence[str] | None = None) -> int:
                     failures += 1
                     print(_format_validation_failure(result), file=sys.stderr)
             return 1 if failures else 0
+
+        if args.command == "preflight":
+            change = repository.resolve(args.change)
+            result = validate_change(
+                change,
+                strict=True,
+                repository=repository,
+            )
+            state = infer_state(change)
+            if not result.ok:
+                print(
+                    f"Preflight FAILED {change.name}\t{state.value}",
+                    file=sys.stderr,
+                )
+                print(_format_validation_failure(result), file=sys.stderr)
+                return 1
+            if args.for_commit and not change.archived:
+                if state == ChangeState.DONE:
+                    message = f"{change.name} is DONE; archive it before commit"
+                else:
+                    message = (
+                        f"{change.name} is {state.value}; only ARCHIVED changes "
+                        "pass --for-commit"
+                    )
+                print(f"spec: error: {message}", file=sys.stderr)
+                return 1
+            print(f"Preflight OK {change.name}\t{state.value}")
+            return 0
 
         if args.command == "archive":
             change = repository.resolve(args.change, active_only=True)
