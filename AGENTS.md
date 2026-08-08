@@ -26,10 +26,17 @@ and tracing behavior measurable.
 
 - `AGENTS.md` is the only project-level AI workflow entry point; do not add a
   project `.agents/skills/` directory or depend on a project skill file.
-- Before implementing a change, run `python scripts/spec.py status` and open or
-  update a change under `specs/changes/` for public behavior, APIs, Trace
-  schemas, permissions, concurrency, tools, context, memory, sessions, or
-  Terminal UX.
+- Before implementing a change, run `python scripts/spec.py status` and conduct
+  a dialogue-based Explore for public behavior, APIs, Trace schemas,
+  permissions, concurrency, tools, context, memory, sessions, or Terminal UX.
+  Explore must record current-state evidence, the goal, scope, proposed
+  approach, affected files, test strategy, risks, and unresolved questions.
+- The AI must use the built-in ask-user confirmation step after presenting the
+  initial Explore plan. The choices are `确认并继续`, `需要调整计划`, and
+  `暂不实施`. Revise the plan before creating a change or implementing when
+  the user requests adjustments; do not create a change or implement before
+  confirmation. Spelling, documentation-only, and test-data-only edits may
+  skip Explore when they do not alter a contract.
 - Keep `spec.md`, `tasks.md`, and `checklist.md` traceable as
   `Requirement -> Acceptance Scenario -> Task -> pytest -> Trace assertion`.
 - During implementation, keep tasks and evidence current. Every new runtime
@@ -38,19 +45,21 @@ and tracing behavior measurable.
   `python scripts/spec.py preflight CHANGE`, which performs strict validation
   and reports the inferred state. Update the affected
   `specs/capabilities/` document before archiving the change.
-- Spelling, documentation-only, and test-data-only edits may skip a change when
-  they do not alter a contract.
 
 ## Done means
 
 Complete the change checklist and run the tests, compile check,
 `python scripts/spec.py check --strict`, `git diff --check`, and a staged-diff
-review for credentials and generated runtime state. A completed active change
-must be archived with `python scripts/spec.py archive` before the commit
-handoff; `python scripts/spec.py preflight CHANGE --for-commit` verifies that
-the change is archived and strict-clean. If the user explicitly requests a
-commit and a change is `DONE` but not archived, archive it first, then stage
-the intended files and create one commit.
+review for credentials and generated runtime state. When
+`python scripts/spec.py preflight CHANGE` reports `DONE`, show the user the
+validation evidence and request explicit confirmation before running
+`python scripts/spec.py archive CHANGE`; do not archive autonomously. After
+the user confirms and the change is archived, run
+`python scripts/spec.py preflight CHANGE --for-commit`. When it is
+strict-clean, show the archived status, intended files, diff summary, and
+verification evidence, then request explicit confirmation before staging and
+running `git commit`. A commit flow never includes `git push`. A user request
+to commit does not bypass either confirmation gate.
 
 Do not run `git commit`, `git commit --amend`, or `git push` without explicit
 user authorization. Do not delete or overwrite important data without

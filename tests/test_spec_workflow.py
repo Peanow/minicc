@@ -341,3 +341,35 @@ def test_repository_bootstrap_change_passes_strict_validation():
 
     assert result.returncode == 0, result.stderr
     assert "000-sdd-bootstrap\tARCHIVED" in result.stdout
+
+
+def test_sdd_workflow_documents_explore_and_human_confirmation_gates():
+    agents = (REPOSITORY_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    readme = (REPOSITORY_ROOT / "specs" / "README.md").read_text(encoding="utf-8")
+    capability = (
+        REPOSITORY_ROOT / "specs" / "capabilities" / "sdd-workflow.md"
+    ).read_text(encoding="utf-8")
+
+    explore = "dialogue-based Explore"
+    assert explore in agents
+    assert explore in readme
+    assert explore in capability
+    assert "built-in ask-user" in agents
+    assert "确认并继续" in readme
+    assert "需要调整计划" in readme
+    assert "暂不实施" in readme
+
+    archive_gate = "request explicit confirmation before running"
+    commit_gate = "request explicit confirmation before staging"
+    assert archive_gate in agents
+    assert commit_gate in agents
+    assert "preflight CHANGE --for-commit" in readme
+    assert "git push" in agents
+    assert "git push" in readme
+    assert "implicit" in readme
+
+    # The documented evidence boundary is the workflow's observable trace for
+    # this documentation-only contract change.
+    assert "pytest evidence" in capability
+    assert "Trace" in capability
+    assert "evidence" in capability

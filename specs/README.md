@@ -11,6 +11,34 @@ schemas, permissions, concurrency, tools, context, memory, sessions, and
 Terminal behavior. Typo fixes, documentation-only edits, and test-data-only
 changes may skip it when they do not alter a contract.
 
+## Lifecycle and human gates
+
+Contract changes begin with a dialogue-based Explore before a change is
+created. The Explore summary records current-state evidence, the goal, scope,
+approach, affected files, test strategy, risks, and unresolved questions. The
+AI then uses the built-in ask-user step and waits for one of
+`确认并继续`, `需要调整计划`, or `暂不实施`. A requested adjustment is folded
+back into the plan before the change is opened; implementation does not begin
+without confirmation. The confirmed Explore conclusion is carried into
+`spec.md`, `tasks.md`, and `checklist.md`; no separate `explore.md` or
+`spec.py explore` command is required.
+
+The lifecycle is:
+
+```text
+Explore -> user confirms plan -> write/approve change -> implement and verify
+-> user confirms archive -> archive -> strict preflight for commit
+-> user confirms commit -> commit
+```
+
+When `preflight CHANGE` reports `DONE`, the AI must present the change and
+verification evidence and wait for archive confirmation before invoking
+`spec.py archive`. Once archived and `preflight CHANGE --for-commit` is
+strict-clean, it must present the proposed commit contents and wait for commit
+confirmation before staging and invoking `git commit`. `git push` is never
+implicit. These are AI workflow gates; the script commands remain available to
+scripts and CI with their existing non-interactive interfaces.
+
 ## Documents and traceability
 
 Every change owns three files:
@@ -52,12 +80,12 @@ change. `--root PATH` can precede the command for tooling and isolated tests.
 Before `approve`, replace every `TBD` and `NEEDS CLARIFICATION`. Approval also
 runs strict structural validation.
 
-Run `status` before starting implementation. Run `preflight CHANGE` before
-declaring a change done; it performs strict validation and reports the inferred
-state without modifying files. `preflight CHANGE --for-commit` additionally
-requires the change to be archived. If an active change is `DONE`, archive it
-with `archive` first. Neither preflight mode commits, stages, pushes, or
-archives files.
+Run `status` before Explore and run `preflight CHANGE` before declaring a
+change done; it performs strict validation and reports the inferred state
+without modifying files. `preflight CHANGE --for-commit` additionally requires
+the change to be archived. If an active change is `DONE`, request archive
+confirmation before using `archive`. Neither preflight mode commits, stages,
+pushes, or archives files.
 
 ## Inferred states
 
