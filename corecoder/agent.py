@@ -668,6 +668,17 @@ class Agent:
             risk=decision.risk.value,
             effects=[effect.value for effect in tool.effects],
         )
+        if preview.decision is Decision.ASK:
+            self._emit(
+                EventKind.APPROVAL_DECIDED,
+                tool_call_id=call.id,
+                tool=call.name,
+                round=round_index,
+                outcome=decision.approval or "deny",
+                decision=decision.decision.value,
+                risk=decision.risk.value,
+                reason=decision.reason,
+            )
         if decision.decision is not Decision.ALLOW:
             if self._run_state is not None:
                 self._run_state.blocked_seen = True

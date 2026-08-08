@@ -111,6 +111,23 @@ def test_plain_renderer_keeps_diagnostics_off_stdout():
     assert "partial" not in stdout.getvalue()
 
 
+def test_pretty_renderer_shows_approval_outcome():
+    output = io.StringIO()
+    renderer = EventRenderer(
+        "pretty",
+        stdout=output,
+        width=80,
+        no_color=True,
+    )
+
+    renderer.emit({
+        "kind": "approval_decided",
+        "data": {"tool": "bash", "outcome": "once"},
+    })
+
+    assert "approved   once" in output.getvalue()
+
+
 def test_approval_never_truncates_command_and_redacts_secrets():
     tail = "x" * 200
     command = f"curl -H 'Authorization: Bearer abcdefghijklmnop' {tail}"
@@ -141,6 +158,39 @@ def test_session_allow_is_only_offered_for_precise_rule():
     approval.decide(ApprovalDetails.legacy("bash", {"command": "make"}, "execute"))
 
     assert "session" not in prompts[0]
+
+
+def test_approval_selector_uses_safe_default_and_details():
+    selections = iter(["details", "session"])
+    calls = []
+    output = io.StringIO()
+
+    def select(message, options, default):
+        calls.append((message, list(options), default))
+        return next(selections)
+
+    approval = ApprovalPrompt(
+        console=Console(file=output, color_system=None),
+        selector=select,
+    )
+    details = ApprovalDetails(
+        tool="bash",
+        arguments={"command": "make API_KEY=top-secret"},
+        reason="workspace code execution requires approval",
+        effect="EXECUTE",
+        risk="workspace-execution",
+        cwd="/workspace",
+        reusable_rule="bash exact: make API_KEY=top-secret",
+    )
+
+    assert approval.decide(details).value == "session"
+    assert all(call[2] == "deny" for call in calls)
+    assert [value for value, _label in calls[0][1]] == [
+        "once", "session", "details", "deny",
+    ]
+    assert "Approval details" in output.getvalue()
+    assert "top-secret" not in output.getvalue()
+    assert "[REDACTED]" in output.getvalue()
 
 
 def test_terminal_sends_double_slash_as_literal_without_stripping(monkeypatch):

@@ -17,6 +17,7 @@ class EventKind(str, Enum):
     MODEL_FAILED = "model_failed"
     TOOL_REQUESTED = "tool_requested"
     APPROVAL_REQUESTED = "approval_requested"
+    APPROVAL_DECIDED = "approval_decided"
     TOOL_STARTED = "tool_started"
     TOOL_FINISHED = "tool_finished"
     CONTEXT_COMPACTED = "context_compacted"

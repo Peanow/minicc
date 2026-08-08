@@ -39,6 +39,7 @@ class PolicyDecision:
     decision: Decision
     reason: str
     risk: RiskClass = RiskClass.UNKNOWN
+    approval: str | None = None
 
 
 @dataclass(frozen=True)
@@ -222,6 +223,7 @@ class ExecutionPolicy:
                 Decision.ALLOW,
                 f"session rule approved: {decision.reason}",
                 decision.risk,
+                approval="session",
             )
         approved = False
         session = False
@@ -242,6 +244,7 @@ class ExecutionPolicy:
             value = getattr(choice, "value", choice)
             approved = value in {True, "once", "session", "allow", "yes"}
             session = value == "session"
+        outcome = "session" if session else "once" if approved else "deny"
         if approved:
             if session and rule:
                 self._session_rules.add(rule)
@@ -249,11 +252,13 @@ class ExecutionPolicy:
                 Decision.ALLOW,
                 f"user approved: {decision.reason}",
                 decision.risk,
+                approval=outcome,
             )
         return PolicyDecision(
             Decision.DENY,
             f"approval unavailable or denied: {decision.reason}",
             decision.risk,
+            approval=outcome,
         )
 
     def _inside_workspace(self, target: str) -> bool:

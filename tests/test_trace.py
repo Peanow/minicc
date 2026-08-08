@@ -176,6 +176,35 @@ def test_workspace_validation_allowance_is_visible_in_trace():
     assert policy_event["data"]["risk"] == "workspace-validation"
 
 
+def test_approval_decision_is_recorded_without_arguments(tmp_path):
+    trace = InMemoryTraceSink()
+    agent = Agent(
+        llm=FakeLLM(),
+        tools=[ValidationTool()],
+        trace=trace,
+        workspace=tmp_path,
+        policy=__import__("corecoder.policy", fromlist=["ExecutionPolicy"]).ExecutionPolicy(
+            "workspace-write",
+            workspace=tmp_path,
+            approval_callback=lambda _request: "once",
+        ),
+    )
+
+    result = agent._exec_tool(ToolCall(
+        id="approval-1",
+        name="bash",
+        arguments={"command": "make API_KEY=top-secret"},
+    ))
+
+    assert result.status.value == "success"
+    event = next(event for event in trace.events if event["event"] == "approval_decided")
+    assert event["data"]["outcome"] == "once"
+    assert event["data"]["decision"] == "allow"
+    assert event["data"]["tool_call_id"] == "approval-1"
+    assert "arguments" not in event["data"]
+    assert "top-secret" not in json.dumps(event)
+
+
 def test_agent_retries_empty_model_response_with_trace_event():
     llm = EmptyThenDoneLLM()
     trace = InMemoryTraceSink()

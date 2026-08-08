@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -148,15 +149,117 @@ class ApprovalDetails:
 
 
 class ApprovalPrompt:
-    """Callable compatible with both legacy and structured policy callbacks."""
+    """Interactive approval selector compatible with policy callbacks.
+
+    The CLI uses a prompt-toolkit selector so approval is a distinct, keyboard
+    navigable decision. ``read`` remains a small line-oriented seam for
+    library callers and deterministic tests that cannot run a terminal app.
+    """
 
     def __init__(
         self,
         console: Console | None = None,
         read: Callable[[str], str] | None = None,
+        selector: Callable[[str, Sequence[tuple[str, str]], str], str] | None = None,
     ):
         self.console = console or Console(stderr=True)
-        self._read = read or self.console.input
+        self._read = read
+        self._selector = selector or self._prompt_toolkit_selector
+
+    def _prompt_toolkit_selector(
+        self,
+        message: str,
+        options: Sequence[tuple[str, str]],
+        default: str,
+    ) -> str:
+        """Run the selector on the approval console's stream.
+
+        Keeping the input/output session local is important: the main
+        PromptSession is paused while a model tool call is being authorized,
+        so the approval interaction must not share its line reader state.
+        """
+        from prompt_toolkit.application import create_app_session
+        from prompt_toolkit.input import create_input
+        from prompt_toolkit.output import create_output
+        from prompt_toolkit.shortcuts import choice
+
+        with create_app_session(
+            input=create_input(),
+            output=create_output(
+                self.console.file,
+                always_prefer_tty=self.console.is_terminal,
+            ),
+        ):
+            return str(
+                choice(
+                    message,
+                    options=options,
+                    default=default,
+                    bottom_toolbar="↑/↓ navigate · Enter confirm · Ctrl-C cancel",
+                    show_frame=True,
+                )
+            )
+
+    @staticmethod
+    def _options(details: ApprovalDetails) -> list[tuple[str, str]]:
+        options = [(ApprovalChoice.ONCE.value, "Allow once")]
+        if details.reusable_rule:
+            options.append((ApprovalChoice.SESSION.value, "Allow exact command for this session"))
+        options.extend([
+            ("details", "Show full redacted details"),
+            (ApprovalChoice.DENY.value, "Deny (safe default)"),
+        ])
+        return options
+
+    def _decide_with_selector(self, details: ApprovalDetails) -> ApprovalChoice:
+        options = self._options(details)
+        while True:
+            selected = self._selector(
+                "Allow this tool call?",
+                options,
+                ApprovalChoice.DENY.value,
+            )
+            if selected == "details":
+                self.console.print(
+                    Panel(
+                        Text(details.as_text(details=True), overflow="fold"),
+                        title="Approval details",
+                        border_style="dim",
+                    )
+                )
+                continue
+            try:
+                return ApprovalChoice(selected)
+            except ValueError:
+                # A custom selector must not be able to accidentally approve
+                # an unknown value; the safe fallback is denial.
+                return ApprovalChoice.DENY
+
+    def _decide_with_reader(self, details: ApprovalDetails) -> ApprovalChoice:
+        details_number = "3" if details.reusable_rule else "2"
+        deny_number = "4" if details.reusable_rule else "3"
+        choices = f"[1] allow once  [{details_number}] details  [{deny_number}] deny"
+        if details.reusable_rule:
+            choices = "[1] allow once  [2] session  [3] details  [4] deny"
+        while True:
+            answer = self._read(f"{choices}\nSelect (default: deny): ").strip().lower()
+            if answer in {"1", "y", "yes", "once"}:
+                return ApprovalChoice.ONCE
+            if answer in {"2", "s", "session"} and details.reusable_rule:
+                return ApprovalChoice.SESSION
+            if answer in {"d", "details", details_number}:
+                self.console.print(
+                    Panel(
+                        Text(details.as_text(details=True), overflow="fold"),
+                        title="Approval details",
+                        border_style="dim",
+                    )
+                )
+                continue
+            if answer in {"", deny_number, "n", "no", "deny"}:
+                return ApprovalChoice.DENY
+            expected = "1, 2, 3, or 4" if details.reusable_rule else "1, 2, or 3"
+            self.console.print(f"[yellow]Choose {expected}.[/yellow]")
 
     def decide(self, details: ApprovalDetails) -> ApprovalChoice:
         self.console.print(
@@ -166,28 +269,9 @@ class ApprovalPrompt:
                 border_style="yellow",
             )
         )
-        choices = "[y] once  [n] deny  [d] details"
-        if details.reusable_rule:
-            choices += "  [s] session"
-        while True:
-            answer = self._read(f"{choices}\n> ").strip().lower()
-            if answer in {"y", "yes", "once"}:
-                return ApprovalChoice.ONCE
-            if answer in {"", "n", "no", "deny"}:
-                return ApprovalChoice.DENY
-            if answer in {"s", "session"} and details.reusable_rule:
-                return ApprovalChoice.SESSION
-            if answer in {"d", "details"}:
-                self.console.print(
-                    Panel(
-                        Text(details.as_text(details=True), overflow="fold"),
-                        title="Approval details",
-                        border_style="dim",
-                    )
-                )
-                continue
-            expected = "y, n, d, or s" if details.reusable_rule else "y, n, or d"
-            self.console.print(f"[yellow]Choose {expected}.[/yellow]")
+        if self._read is not None:
+            return self._decide_with_reader(details)
+        return self._decide_with_selector(details)
 
     def __call__(self, *args: Any) -> ApprovalChoice | bool:
         # ExecutionPolicy v1 passes (tool_name, arguments, reason) and expects a

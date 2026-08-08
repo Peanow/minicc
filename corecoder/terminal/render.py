@@ -237,6 +237,15 @@ class EventRenderer:
             risk = data.get("risk", "unknown")
             self.console.print(f"[yellow]  ? approval   {tool} · {risk}[/yellow]")
             return
+        if name == "approval_decided":
+            outcome = str(data.get("outcome", "deny"))
+            if outcome == "once":
+                self.console.print("[green]  ✓ approved   once[/green]")
+            elif outcome == "session":
+                self.console.print("[green]  ✓ approved   for this session[/green]")
+            else:
+                self.console.print("[dim]  · denied     tool call blocked[/dim]")
+            return
         if name == "tool_started":
             tool = data.get("tool", data.get("name", "tool"))
             self.console.print(f"[cyan]  ↻ running    {tool}[/cyan]")
