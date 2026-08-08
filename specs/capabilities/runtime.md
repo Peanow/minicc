@@ -7,3 +7,8 @@
   tools; application permissions are not an operating-system sandbox.
 - Tools declare effects and return `ToolResult`; undeclared effects require an
   interactive approval and are denied headlessly.
+- Configuration loads optional `~/.corecoder/.env` before the existing
+  project/parent `.env` fallback, while process environment variables remain
+  authoritative. Runtime startup emits a redacted `config_loaded` Trace event
+  with source metadata only; application permission checks are not an OS
+  sandbox.

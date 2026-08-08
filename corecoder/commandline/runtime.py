@@ -197,7 +197,22 @@ def build_runtime(
 ) -> RuntimeBundle:
     workspace_path = Path(workspace or Path.cwd()).expanduser().resolve()
     config = apply_runtime_options(Config.from_env(), args)
+
+    # Configuration is loaded before the rest of the composition root so the
+    # startup decision is observable even when validation fails.  The payload
+    # contains only source labels, paths, and booleans; Config never exposes
+    # the key value through this event.
+    trace_sinks = []
+    trace_path = getattr(args, "trace", None)
+    if trace_path:
+        trace_sinks.append(JsonlTraceSink(trace_path))
+    trace = CompositeTraceSink(trace_sinks)
+    if trace_path:
+        trace.path = Path(trace_path).expanduser().resolve()
+    trace.emit("config_loaded", **config.trace_metadata())
+
     if not config.api_key:
+        trace.close()
         raise ConfigurationError(
             "No API key found. Set OPENAI_API_KEY, DEEPSEEK_API_KEY, "
             "or CORECODER_API_KEY."
@@ -226,13 +241,6 @@ def build_runtime(
         api_key=config.api_key,
         base_url=config.base_url,
     )
-    trace_sinks = []
-    trace_path = getattr(args, "trace", None)
-    if trace_path:
-        trace_sinks.append(JsonlTraceSink(trace_path))
-    trace = CompositeTraceSink(trace_sinks)
-    if trace_path:
-        trace.path = Path(trace_path).expanduser().resolve()
     try:
         observability = ObservabilityConfig.from_env()
     except ValueError as exc:

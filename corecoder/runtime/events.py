@@ -9,6 +9,7 @@ from typing import Any, Protocol
 
 
 class EventKind(str, Enum):
+    CONFIG_LOADED = "config_loaded"
     RUN_STARTED = "run_started"
     TEXT_DELTA = "text_delta"
     MODEL_STARTED = "model_started"

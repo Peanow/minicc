@@ -4,7 +4,7 @@ __version__ = "0.4.0"
 
 from corecoder.agent import Agent
 from corecoder.llm import LLM
-from corecoder.config import Config
+from corecoder.config import Config, initialize_user_env
 from corecoder.tools import ToolRegistry, build_default_tools
 from corecoder.tools.base import Effect, ToolResult, ToolStatus
 from corecoder.paths import AppPaths
@@ -35,7 +35,7 @@ from corecoder.evidence import export_evidence
 from corecoder.observability import ObservabilityConfig
 
 __all__ = [
-    "Agent", "LLM", "Config", "ToolRegistry", "build_default_tools",
+    "Agent", "LLM", "Config", "initialize_user_env", "ToolRegistry", "build_default_tools",
     "Effect", "ToolResult", "ToolStatus", "AppPaths",
     "AgentState", "AgentStatus", "EventKind", "RunEvent", "RunState",
     "RunStatus", "WorkspaceState",
