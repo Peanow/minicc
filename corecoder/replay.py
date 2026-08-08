@@ -96,9 +96,9 @@ def replay_trace(path: str | Path) -> ReplaySummary:
                 errors.append(f"event {index}: run_started while a run is active")
             if isinstance(timestamp, (int, float)):
                 run_started_at = float(timestamp)
-        elif name == "llm_started":
+        elif name in {"llm_started", "model_started"}:
             active_llm += 1
-        elif name == "llm_finished":
+        elif name in {"llm_finished", "model_finished"}:
             if active_llm <= 0:
                 errors.append(f"event {index}: llm_finished without llm_started")
             else:
@@ -110,6 +110,11 @@ def replay_trace(path: str | Path) -> ReplaySummary:
                 for call in data.get("tool_calls") or []
                 if isinstance(call, dict) and call.get("id")
             )
+        elif name == "model_failed":
+            if active_llm <= 0:
+                errors.append(f"event {index}: model_failed without model_started")
+            else:
+                active_llm -= 1
         elif name == "tool_started":
             active_tools[str(data.get("tool", ""))] += 1
         elif name == "tool_finished":
@@ -165,7 +170,7 @@ def replay_trace(path: str | Path) -> ReplaySummary:
         valid=not errors,
         status=status,
         event_count=len(events),
-        llm_calls=counts["llm_finished"],
+        llm_calls=counts["llm_finished"] + counts["model_finished"],
         tool_calls=counts["tool_result"] or counts["tool_finished"],
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,

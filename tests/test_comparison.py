@@ -107,7 +107,7 @@ def test_comparison_cli(tmp_path, monkeypatch, capsys):
     output = tmp_path / "comparison.html"
     monkeypatch.setattr(
         "sys.argv",
-        ["corecoder", "compare", str(source), "-o", str(output)],
+        ["corecoder", "lab", "compare", str(source), "-o", str(output)],
     )
 
     main()

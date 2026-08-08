@@ -144,7 +144,8 @@ class InMemoryTraceSink(TraceSink):
 
     def emit(self, event: str, **data):
         record = {
-            "schema_version": 1,
+            "schema": 2,
+            "schema_version": 2,
             "run_id": self.run_id,
             "session_id": self.session_id,
             "timestamp": time.time(),
@@ -182,7 +183,8 @@ class JsonlTraceSink(TraceSink):
 
     def emit(self, event: str, **data):
         record = {
-            "schema_version": 1,
+            "schema": 2,
+            "schema_version": 2,
             "run_id": self.run_id,
             "session_id": self.session_id,
             "timestamp": time.time(),
@@ -361,7 +363,7 @@ class OpenTelemetryTraceSink(TraceSink):
                     self._set(self._root, "input.mime_type", "text/plain")
                 return
 
-            if event == "llm_started":
+            if event in {"llm_started", "model_started"}:
                 round_index = int(safe.get("round") or 0)
                 model = safe.get("model") or self._model
                 span = self._tracer.start_span(
@@ -381,7 +383,7 @@ class OpenTelemetryTraceSink(TraceSink):
                 self._llm_spans[round_index] = span
                 return
 
-            if event == "llm_finished":
+            if event in {"llm_finished", "model_finished", "model_failed"}:
                 round_index = int(safe.get("round") or 0)
                 span = self._llm_spans.pop(round_index, None)
                 if span is None:
@@ -389,6 +391,10 @@ class OpenTelemetryTraceSink(TraceSink):
                 self._set(span, "gen_ai.usage.input_tokens", safe.get("prompt_tokens", 0))
                 self._set(span, "gen_ai.usage.output_tokens", safe.get("completion_tokens", 0))
                 self._set(span, "corecoder.duration_ms", safe.get("duration_ms", 0))
+                if event == "model_failed":
+                    from opentelemetry.trace import Status, StatusCode
+                    span.set_status(Status(StatusCode.ERROR, str(safe.get("error"))))
+                    self._set(span, "error.type", safe.get("error_type"))
                 if self.content_policy == "full":
                     self._set(span, "output.value", {
                         "content": safe.get("content"),
@@ -500,17 +506,49 @@ class OpenTelemetryTraceSink(TraceSink):
         self._provider.shutdown()
 
 
+@dataclass(frozen=True)
+class TokenUsage:
+    prompt: int = 0
+    completion: int = 0
+
+    @property
+    def total(self) -> int:
+        return self.prompt + self.completion
+
+    def to_dict(self) -> dict[str, int]:
+        return {
+            "prompt": self.prompt,
+            "completion": self.completion,
+            "total": self.total,
+        }
+
+
 @dataclass
 class RunResult:
     """Structured result returned by :meth:`Agent.run`."""
 
+    run_id: str
     status: str
     final_answer: str
     changed_files: list[str]
-    prompt_tokens: int
-    completion_tokens: int
-    estimated_cost: float | None
+    token: TokenUsage
+    cost: float | None
+    error: str | None = None
     trace_path: str | None = None
 
+    @property
+    def prompt_tokens(self) -> int:
+        return self.token.prompt
+
+    @property
+    def completion_tokens(self) -> int:
+        return self.token.completion
+
+    @property
+    def estimated_cost(self) -> float | None:
+        return self.cost
+
     def to_dict(self) -> dict:
-        return asdict(self)
+        value = asdict(self)
+        value["token"]["total"] = self.token.total
+        return value

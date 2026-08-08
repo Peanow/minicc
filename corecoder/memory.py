@@ -168,16 +168,28 @@ class MemoryStore:
         db_path: Path | None = None,
         chroma_dir: Path | None = None,
         embedding_dims: int = 512,
+        readonly: bool = False,
     ):
         self._dims = embedding_dims
         self._path = db_path or _db_path()
-        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._readonly = readonly
+        if not readonly:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
 
         # SQLite connection
-        self._conn = sqlite3.connect(str(self._path))
+        if readonly:
+            self._conn = sqlite3.connect(
+                f"file:{self._path}?mode=ro",
+                uri=True,
+            )
+        else:
+            self._conn = sqlite3.connect(str(self._path))
         self._conn.row_factory = sqlite3.Row
-        self._conn.execute("PRAGMA journal_mode=WAL")
-        self._init_sqlite_schema()
+        if readonly:
+            self._conn.execute("PRAGMA query_only=ON")
+        else:
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._init_sqlite_schema()
 
     # ---- SQLite schema init ----
 
@@ -203,6 +215,8 @@ class MemoryStore:
 
         Returns the row id, or None on duplicate.
         """
+        if self._readonly:
+            raise PermissionError("memory store is read-only")
         if not obs.content_hash:
             obs.content_hash = _hash(obs.project, obs.title, obs.content)
         if not obs.created_at:
@@ -361,6 +375,8 @@ class MemoryStore:
     # ---- delete ----
 
     def delete_project(self, project: str) -> int:
+        if self._readonly:
+            raise PermissionError("memory store is read-only")
         count = self.count(project)
 
         self._conn.execute(

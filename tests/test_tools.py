@@ -5,7 +5,14 @@ import sys
 import tempfile
 from pathlib import Path
 
-from corecoder.tools import ALL_TOOLS, get_tool
+from corecoder.tools import ToolRegistry, build_default_tools
+
+
+def get_tool(name):
+    return ToolRegistry().get(name)
+
+
+ALL_TOOLS = build_default_tools()
 
 
 def test_tool_count():

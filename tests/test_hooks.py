@@ -319,7 +319,6 @@ def test_agent_with_hooks():
     """Agent accepts hooks and they affect tool execution."""
     from corecoder.agent import Agent
     from corecoder.llm import LLM
-    from corecoder.tools import get_tool
 
     hooks = HookConfig(hooks={
         HookEvent.PreToolUse: [

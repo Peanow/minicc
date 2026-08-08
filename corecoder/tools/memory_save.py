@@ -5,10 +5,11 @@ When the model identifies something worth remembering across sessions
 invokes ``memory_save(title="...", content="...")`` to persist it.
 """
 
-from .base import Tool
+from .base import Effect, Tool, ToolResult
 
 
 class MemorySaveTool(Tool):
+    effects = frozenset({Effect.APP_STATE_WRITE})
     name = "memory_save"
     description = (
         "Save an observation to cross-session memory. Use this to persist "
@@ -38,34 +39,25 @@ class MemorySaveTool(Tool):
     # set by Agent.__init__ after construction
     _agent = None
 
-    def execute(self, title: str, content: str, type: str = "discovery") -> str:
+    def execute(self, title: str, content: str, type: str = "discovery") -> ToolResult:
         if self._agent is None:
-            return "Error: memory save not initialized (no agent)"
-
-        from ..memory import MemoryStore, Observation, get_project_name
-
-        project = get_project_name()
-        obs = Observation(
-            project=project,
-            kind="manual",
-            type=type,
-            title=title,
-            content=content,
-        )
-
-        # generate embedding if available
-        embedding = None
-        if self._agent.embedding.is_available():
-            embedding = self._agent.embedding.embed(f"{title}: {content}")
-
-        store = MemoryStore(embedding_dims=self._agent.embedding.dims)
+            return ToolResult.error(
+                "memory save not initialized (no agent)",
+                error_type="NotInitialized",
+            )
         try:
-            row_id = store.save(obs, embedding=embedding)
-        finally:
-            store.close()
+            row_id, embedded = self._agent.memory_service.save(
+                title=title,
+                content=content,
+                kind=type,
+            )
+        except Exception as exc:
+            return ToolResult.error(str(exc), error_type=exc.__class__.__name__)
 
         if row_id is not None:
-            emb_status = "with embedding" if embedding else "without embedding"
-            return f"Memory saved: [{type}] {title} ({emb_status}, id={row_id})"
+            emb_status = "with embedding" if embedded else "without embedding"
+            return ToolResult.success(
+                f"Memory saved: [{type}] {title} ({emb_status}, id={row_id})"
+            )
         else:
-            return f"Memory already exists: {title} (duplicate)"
+            return ToolResult.success(f"Memory already exists: {title} (duplicate)")

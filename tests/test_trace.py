@@ -7,7 +7,7 @@ import pytest
 from corecoder.agent import Agent
 from corecoder.llm import LLMResponse, ToolCall
 from corecoder.tools import ToolRegistry
-from corecoder.tools.base import Tool
+from corecoder.tools.base import Effect, Tool
 from corecoder.trace import (
     InMemoryTraceSink,
     JsonlTraceSink,
@@ -18,6 +18,7 @@ from corecoder.context import create_context_strategy
 
 
 class EchoTool(Tool):
+    effects = frozenset({Effect.READ_FS})
     name = "echo"
     description = "Echo text."
     parameters = {
@@ -31,6 +32,7 @@ class EchoTool(Tool):
 
 
 class ValidationTool(Tool):
+    effects = frozenset({Effect.EXECUTE})
     name = "bash"
     description = "Record a validation command without executing it."
     parameters = {
@@ -129,30 +131,36 @@ def test_agent_executes_its_private_tool_registry():
     assert run_started["data"]["token_counter"] == "approx"
     assert run_started["data"]["permission_mode"] == "workspace-write"
     assert run_started["data"]["workspace"]
-    llm_started = next(event for event in trace.events if event["event"] == "llm_started")
+    llm_started = next(event for event in trace.events if event["event"] == "model_started")
     assert len(llm_started["data"]["request_fingerprint"]) == 64
     events = [event["event"] for event in trace.events]
     assert events == [
         "run_started",
-        "llm_started",
-        "llm_finished",
+        "model_started",
+        "model_finished",
+        "tool_requested",
         "policy_decision",
         "tool_started",
         "tool_finished",
         "tool_result",
-        "llm_started",
-        "llm_finished",
+        "model_started",
+        "model_finished",
         "run_finished",
     ]
     tool_event = next(e for e in trace.events if e["event"] == "tool_finished")
-    assert tool_event["data"]["output"] == "echo:hello"
+    assert tool_event["data"]["content"] == "echo:hello"
     policy_event = next(e for e in trace.events if e["event"] == "policy_decision")
-    assert policy_event["data"]["risk"] == "unknown"
+    assert policy_event["data"]["risk"] == "read-only"
 
 
 def test_workspace_validation_allowance_is_visible_in_trace():
     trace = InMemoryTraceSink()
-    agent = Agent(llm=FakeLLM(), tools=[ValidationTool()], trace=trace)
+    agent = Agent(
+        llm=FakeLLM(),
+        tools=[ValidationTool()],
+        trace=trace,
+        policy=__import__("corecoder.policy", fromlist=["ExecutionPolicy"]).ExecutionPolicy("full-access"),
+    )
 
     output = agent._exec_tool(ToolCall(
         id="validation-1",
@@ -160,7 +168,7 @@ def test_workspace_validation_allowance_is_visible_in_trace():
         arguments={"command": "python -m pytest -q"},
     ))
 
-    assert output == "validated:python -m pytest -q"
+    assert output.content == "validated:python -m pytest -q"
     policy_event = next(
         event for event in trace.events if event["event"] == "policy_decision"
     )

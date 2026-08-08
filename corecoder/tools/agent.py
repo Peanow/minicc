@@ -8,10 +8,11 @@ its own context window.
 The sub-agent runs to completion and returns a text summary.
 """
 
-from .base import Tool
+from .base import Effect, Tool, ToolResult
 
 
 class AgentTool(Tool):
+    effects = frozenset({Effect.READ_FS})
     name = "agent"
     description = (
         "Spawn a read-only sub-agent to research a complex sub-task. "
@@ -32,9 +33,12 @@ class AgentTool(Tool):
     # set by Agent.__init__ after construction
     _parent_agent = None
 
-    def execute(self, task: str) -> str:
+    def execute(self, task: str) -> ToolResult:
         if self._parent_agent is None:
-            return "Error: agent tool not initialized (no parent agent)"
+            return ToolResult.error(
+                "agent tool not initialized (no parent agent)",
+                error_type="NotInitialized",
+            )
 
         # import here to avoid circular dep
         from ..agent import Agent
@@ -44,7 +48,7 @@ class AgentTool(Tool):
         parent = self._parent_agent
         read_only_names = {"read_file", "glob", "grep"}
         read_only_tools = [
-            tool for tool in build_default_tools()
+            tool for tool in build_default_tools(parent.workspace)
             if tool.name in read_only_names
         ]
         sub = Agent(
@@ -58,13 +62,16 @@ class AgentTool(Tool):
             ),
             context_strategy=parent.context.strategy_name,
             token_counter=parent.context.token_counter,
+            workspace=parent.workspace,
+            app_paths=parent.app_paths,
+            ephemeral=True,
         )
 
         try:
-            result = sub.chat(task)
+            result = sub.run(task).final_answer
             # trim long results to avoid blowing up parent's context
             if len(result) > 5000:
                 result = result[:4500] + "\n... (sub-agent output truncated)"
-            return f"[Sub-agent completed]\n{result}"
+            return ToolResult.success(f"[Sub-agent completed]\n{result}")
         except Exception as e:
-            return f"Sub-agent error: {e}"
+            return ToolResult.error(str(e), error_type=type(e).__name__)

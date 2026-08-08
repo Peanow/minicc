@@ -83,7 +83,7 @@ def _record_edit_trace(tmp_path, monkeypatch):
                 token_counter=ApproxTokenCounter(),
             ),
         )
-        agent.chat("Change the value to 2.")
+        agent.run("Change the value to 2.")
         agent.close()
         trace.close()
     return fixture, trace_path
@@ -126,6 +126,7 @@ def test_runtime_replay_cli(tmp_path, monkeypatch, capsys):
         "sys.argv",
         [
             "corecoder",
+            "trace",
             "runtime-replay",
             str(trace_path),
             "--fixture",

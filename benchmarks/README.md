@@ -19,8 +19,8 @@ repositories, and Tier 3 external issue benchmarks. See
 Dry runs validate every fixture and protected path without loading an API key:
 
 ```bash
-corecoder eval benchmarks/local-v1.json --dry-run
-corecoder eval benchmarks/local-v1.json --dry-run \
+corecoder lab eval benchmarks/local-v1.json --dry-run
+corecoder lab eval benchmarks/local-v1.json --dry-run \
   --task python-safe-path --strategy hybrid-workspace
 ```
 
@@ -34,7 +34,7 @@ The Tier 2 pilot manifest currently contains three pinned regressions from
 python-diskcache, cachetools, and more-itertools:
 
 ```bash
-corecoder eval benchmarks/tier2-pilot.json --dry-run --repeat 1
+corecoder lab eval benchmarks/tier2-pilot.json --dry-run --repeat 1
 ```
 
 Each curated snapshot records its upstream commit, PR, and license in both the
@@ -47,7 +47,7 @@ still recorded as `ignored_generated_files` in each result and Trace event.
 ## Run cases
 
 ```bash
-corecoder eval benchmarks/local-v1.json \
+corecoder lab eval benchmarks/local-v1.json \
   --task python-safe-path \
   --strategy hybrid-workspace \
   -o benchmarks/results/local-v1-smoke
@@ -84,7 +84,7 @@ request. A recorded case can therefore drive the Agent Runtime without another
 model call:
 
 ```bash
-corecoder runtime-replay path/to/trace.jsonl \
+corecoder trace runtime-replay path/to/trace.jsonl \
   --fixture tasks/python-inclusive-range \
   -o ../.tmp/runtime-replay
 ```
@@ -97,7 +97,7 @@ sub-agent. Project shell hooks are disabled during replay.
 Generate an offline comparison from one or more evidence directories:
 
 ```bash
-corecoder compare results/run-a results/run-b -o ../.tmp/comparison.html
+corecoder lab compare results/run-a results/run-b -o ../.tmp/comparison.html
 ```
 
 The HTML is self-contained and includes a profile summary plus a task/profile
@@ -109,7 +109,7 @@ Evaluation directories intentionally contain artifacts that must not be
 committed. Audit a completed run and export a reviewed evidence bundle:
 
 ```bash
-corecoder evidence ../.tmp/local-v1-run \
+corecoder lab evidence ../.tmp/local-v1-run \
   -o results/local-v1-reviewed
 ```
 

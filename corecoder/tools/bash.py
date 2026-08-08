@@ -7,10 +7,10 @@ Claude Code's BashTool is 1,143 lines. This is the distilled version:
 - Working directory tracking (cd awareness)
 """
 
-import os
 import re
+import shlex
 import subprocess
-from .base import Tool
+from .base import Effect, Tool, ToolResult
 
 # patterns that could wreck the filesystem or leak secrets
 _DANGEROUS_PATTERNS = [
@@ -27,6 +27,7 @@ _DANGEROUS_PATTERNS = [
 
 
 class BashTool(Tool):
+    effects = frozenset({Effect.EXECUTE})
     name = "bash"
     description = (
         "Execute a shell command. Returns stdout, stderr, and exit code. "
@@ -47,17 +48,19 @@ class BashTool(Tool):
         "required": ["command"],
     }
 
-    def __init__(self):
-        self._cwd: str | None = None
+    def __init__(self, workspace=None):
+        super().__init__(workspace)
 
-    def execute(self, command: str, timeout: int = 120) -> str:
+    def execute(self, command: str, timeout: int = 120) -> ToolResult:
         # safety check
         warning = _check_dangerous(command)
         if warning:
-            return f"⚠ Blocked: {warning}\nCommand: {command}\nIf intentional, modify the command to be more specific."
+            return ToolResult.blocked(
+                f"Blocked: {warning}\nCommand: {command}\n"
+                "If intentional, modify the command to be more specific."
+            )
 
-        # use tracked working directory
-        cwd = self._cwd or os.getcwd()
+        cwd = self.workspace.cwd if self.workspace is not None else self.resolve_path(".")
 
         try:
             proc = subprocess.run(
@@ -71,7 +74,7 @@ class BashTool(Tool):
 
             # track cd commands so next command runs in the right place
             if proc.returncode == 0:
-                self._update_cwd(command, cwd)
+                self._update_cwd(command)
             out = proc.stdout
             if proc.stderr:
                 out += f"\n[stderr]\n{proc.stderr}"
@@ -84,26 +87,32 @@ class BashTool(Tool):
                     + f"\n\n... truncated ({len(out)} chars total) ...\n\n"
                     + out[-3000:]
                 )
-            return out.strip() or "(no output)"
+            content = out.strip() or "(no output)"
+            if proc.returncode:
+                return ToolResult.error(
+                    content,
+                    error_type="ProcessExitError",
+                    exit_code=proc.returncode,
+                )
+            return ToolResult.success(content, exit_code=0)
         except subprocess.TimeoutExpired:
-            return f"Error: timed out after {timeout}s"
+            return ToolResult.error(
+                f"timed out after {timeout}s",
+                error_type="TimeoutExpired",
+            )
         except Exception as e:
-            return f"Error running command: {e}"
+            return ToolResult.error(str(e), error_type=type(e).__name__)
 
-    def _update_cwd(self, command: str, current_cwd: str):
-        """Track directory changes from cd commands."""
-        # simple heuristic: look for cd at the end of an && chain or standalone
-        parts = command.split("&&")
-        for part in parts:
-            part = part.strip()
-            if part.startswith("cd "):
-                target = part[3:].strip().strip("'\"")
-                if target:
-                    new_dir = os.path.normpath(
-                        os.path.join(current_cwd, os.path.expanduser(target))
-                    )
-                    if os.path.isdir(new_dir):
-                        self._cwd = new_dir
+    def _update_cwd(self, command: str) -> None:
+        """Persist only a standalone successful ``cd`` command."""
+        if self.workspace is None or any(token in command for token in ("&&", ";", "|", "\n")):
+            return
+        try:
+            parts = shlex.split(command)
+        except ValueError:
+            return
+        if len(parts) == 2 and parts[0] == "cd":
+            self.workspace.chdir(parts[1])
 
 
 def _check_dangerous(cmd: str) -> str | None:

@@ -169,8 +169,8 @@ def _load_recording(events: list[dict]) -> tuple[dict, list[RecordedExchange]]:
     if not run.get("workspace"):
         raise ValueError("trace does not record its source workspace")
 
-    llm_starts = _event_data(events, "llm_started")
-    llm_finishes = _event_data(events, "llm_finished")
+    llm_starts = _event_data(events, "model_started") or _event_data(events, "llm_started")
+    llm_finishes = _event_data(events, "model_finished") or _event_data(events, "llm_finished")
     if len(llm_starts) != len(llm_finishes) or not llm_finishes:
         raise ValueError("trace has an incomplete LLM lifecycle")
 
@@ -241,9 +241,20 @@ def _compare_tool_results(
             f"tool result count mismatch: {len(recorded)} recorded, "
             f"{len(replayed)} replayed"
         )
+    def stable(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {
+                key: stable(item)
+                for key, item in value.items()
+                if not (key == "duration_ms" or key == "timestamp")
+            }
+        if isinstance(value, list):
+            return [stable(item) for item in value]
+        return value
+
     for index, (expected, actual) in enumerate(zip(recorded, replayed), start=1):
-        expected_normalized = _normalize(expected, source_workspace)
-        actual_normalized = _normalize(actual, replay_workspace)
+        expected_normalized = stable(_normalize(expected, source_workspace))
+        actual_normalized = stable(_normalize(actual, replay_workspace))
         if expected_normalized != actual_normalized:
             divergences.append(f"tool result {index} differs")
     return not divergences, divergences
@@ -346,13 +357,21 @@ def runtime_replay(
                 workspace,
                 project_root=workspace,
             ),
-            policy=ExecutionPolicy(permission_mode, workspace=workspace),
+            # Replay is explicitly driven by an already recorded, validated
+            # decision sequence.  Side effects remain confined to the fresh
+            # fixture workspace and Bash/sub-agent traces are rejected above.
+            policy=ExecutionPolicy(
+                permission_mode,
+                workspace=workspace,
+                approval_callback=lambda *_args: True,
+            ),
             context_strategy=context,
         )
         try:
-            final_answer = agent.chat(str(run.get("user_input") or ""))
-        except ReplayDivergence as exc:
-            divergences.append(str(exc))
+            run_result = agent.run(str(run.get("prompt") or run.get("user_input") or ""))
+            final_answer = run_result.final_answer
+            if run_result.error:
+                divergences.append(run_result.error)
         finally:
             agent.close()
             trace.close()
@@ -365,7 +384,10 @@ def runtime_replay(
         workspace,
     )
     divergences.extend(tool_divergences)
-    recorded_answers = _event_data(recorded_events, "llm_finished")
+    recorded_answers = (
+        _event_data(recorded_events, "model_finished")
+        or _event_data(recorded_events, "llm_finished")
+    )
     expected_answer = str(recorded_answers[-1].get("content") or "")
     final_answer_match = (
         _normalize(expected_answer, source_workspace)

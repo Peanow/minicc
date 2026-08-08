@@ -1,11 +1,11 @@
 """File creation / overwrite."""
 
-from pathlib import Path
-from .base import Tool
-from .edit import _changed_files
+from .base import Effect, Tool, ToolResult
+from .edit import _unified_diff
 
 
 class WriteFileTool(Tool):
+    effects = frozenset({Effect.WRITE_FS})
     name = "write_file"
     description = (
         "Create a new file or completely overwrite an existing one. "
@@ -26,16 +26,23 @@ class WriteFileTool(Tool):
         "required": ["file_path", "content"],
     }
 
-    def __init__(self, changed_files: set[str] | None = None):
-        self.changed_files = changed_files if changed_files is not None else _changed_files
+    def __init__(self, changed_files: set[str] | None = None, workspace=None):
+        super().__init__(workspace)
+        self.changed_files = changed_files if changed_files is not None else set()
 
-    def execute(self, file_path: str, content: str) -> str:
+    def execute(self, file_path: str, content: str) -> ToolResult:
         try:
-            p = Path(file_path).expanduser().resolve()
+            p = self.resolve_path(file_path, require_inside=True)
+            old_content = p.read_text(errors="replace") if p.exists() else ""
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(content)
             self.changed_files.add(str(p))
             n_lines = content.count("\n") + (1 if content and not content.endswith("\n") else 0)
-            return f"Wrote {n_lines} lines to {file_path}"
+            diff = _unified_diff(old_content, content, str(p))
+            return ToolResult.success(
+                f"Wrote {n_lines} lines to {file_path}\n{diff}".rstrip(),
+                changed_files=(str(p),),
+                diff=diff or None,
+            )
         except Exception as e:
-            return f"Error: {e}"
+            return ToolResult.error(str(e), error_type=type(e).__name__)

@@ -1,11 +1,11 @@
 """File pattern matching."""
 
-from pathlib import Path
-from .base import Tool
+from .base import Effect, Tool, ToolResult
 
 
 class GlobTool(Tool):
     parallel_safe = True
+    effects = frozenset({Effect.READ_FS})
     name = "glob"
     description = (
         "Find files matching a glob pattern. "
@@ -26,13 +26,19 @@ class GlobTool(Tool):
         "required": ["pattern"],
     }
 
-    def execute(self, pattern: str, path: str = ".") -> str:
+    def execute(self, pattern: str, path: str = ".") -> ToolResult:
         try:
-            base = Path(path).expanduser().resolve()
+            base = self.resolve_path(path, require_inside=True)
             if not base.is_dir():
-                return f"Error: {path} is not a directory"
+                return ToolResult.error(
+                    f"{path} is not a directory",
+                    error_type="NotADirectoryError",
+                )
 
-            hits = list(base.glob(pattern))
+            hits = [
+                hit for hit in base.glob(pattern)
+                if self.workspace is None or self.workspace.contains(hit)
+            ]
             # sort by mtime, newest first
             hits.sort(key=lambda p: p.stat().st_mtime if p.exists() else 0, reverse=True)
 
@@ -43,6 +49,6 @@ class GlobTool(Tool):
 
             if total > 100:
                 result += f"\n... ({total} matches, showing first 100)"
-            return result or "No files matched."
+            return ToolResult.success(result or "No files matched.")
         except Exception as e:
-            return f"Error: {e}"
+            return ToolResult.error(str(e), error_type=type(e).__name__)

@@ -290,6 +290,7 @@ def test_evidence_cli(tmp_path, monkeypatch, capsys):
         "sys.argv",
         [
             "corecoder",
+            "lab",
             "evidence",
             str(evaluation),
             "-o",

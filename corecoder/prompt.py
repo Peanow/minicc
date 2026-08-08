@@ -1,7 +1,7 @@
 """System prompt - the instructions that turn an LLM into a coding agent."""
 
-import os
 import platform
+from pathlib import Path
 
 from .skills import Skill, format_skills_directory
 
@@ -11,8 +11,9 @@ def system_prompt(
     skills: list[Skill] | None = None,
     memory_context: str = "",
     project_instructions: str = "",
+    workspace: str | Path | None = None,
 ) -> str:
-    cwd = os.getcwd()
+    cwd = str(Path(workspace).resolve()) if workspace is not None else str(Path.cwd())
     tool_list = "\n".join(f"- **{t.name}**: {t.description}" for t in tools)
     uname = platform.uname()
 

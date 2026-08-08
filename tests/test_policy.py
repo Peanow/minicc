@@ -39,10 +39,10 @@ def test_workspace_write_rejects_symlink_escape(tmp_path):
     assert result.decision == Decision.DENY
 
 
-def test_workspace_write_allows_tests_but_requires_approval_for_arbitrary_code(tmp_path):
+def test_workspace_write_requires_approval_for_all_execution(tmp_path):
     denied = ExecutionPolicy("workspace-write", workspace=tmp_path)
     test_decision = denied.authorize("bash", {"command": "pytest -q"})
-    assert test_decision.decision == Decision.ALLOW
+    assert test_decision.decision == Decision.DENY
     assert test_decision.risk == RiskClass.VALIDATION
     assert denied.authorize(
         "bash", {"command": "python app.py"}
@@ -63,7 +63,7 @@ def test_workspace_write_allows_classified_read_only_shell(tmp_path):
     policy = ExecutionPolicy("workspace-write", workspace=tmp_path)
     result = policy.authorize("bash", {"command": "git diff -- app.py"})
 
-    assert result.decision == Decision.ALLOW
+    assert result.decision == Decision.DENY
     assert result.risk == RiskClass.READ_ONLY
 
 

@@ -6,7 +6,10 @@ import shlex
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
+
+from .runtime.workspace import WorkspaceState
+from .tools.base import Effect, Tool
 
 
 class PermissionMode(str, Enum):
@@ -38,7 +41,18 @@ class PolicyDecision:
     risk: RiskClass = RiskClass.UNKNOWN
 
 
-ApprovalCallback = Callable[[str, dict, str], bool]
+@dataclass(frozen=True)
+class ApprovalRequest:
+    tool: str
+    arguments: dict[str, Any]
+    reason: str
+    effects: tuple[Effect, ...]
+    risk: RiskClass
+    cwd: str
+    reusable_rule: str | None = None
+
+
+ApprovalCallback = Callable[..., Any]
 
 
 class ExecutionPolicy:
@@ -48,8 +62,6 @@ class ExecutionPolicy:
     tools and subprocesses outside the Agent runtime are not contained by it.
     """
 
-    _READ_TOOLS = {"read_file", "glob", "grep", "memory_search", "skill", "agent"}
-    _WRITE_TOOLS = {"write_file", "edit_file"}
     _SAFE_READ_COMMANDS = {
         "pwd", "ls", "find", "rg", "grep", "sed", "head", "tail", "wc",
     }
@@ -75,53 +87,81 @@ class ExecutionPolicy:
         "install", "add", "update", "upgrade", "sync", "download",
         "view", "info", "search", "audit", "publish", "login",
     }
+    _BUILTIN_EFFECTS = {
+        "bash": frozenset({Effect.EXECUTE}),
+        "read_file": frozenset({Effect.READ_FS}),
+        "glob": frozenset({Effect.READ_FS}),
+        "grep": frozenset({Effect.READ_FS}),
+        "agent": frozenset({Effect.READ_FS}),
+        "memory_search": frozenset({Effect.READ_FS}),
+        "write_file": frozenset({Effect.WRITE_FS}),
+        "edit_file": frozenset({Effect.WRITE_FS}),
+        "skill": frozenset({Effect.APP_STATE_WRITE}),
+        "memory_save": frozenset({Effect.APP_STATE_WRITE}),
+    }
 
     def __init__(
         self,
         mode: PermissionMode | str = PermissionMode.WORKSPACE_WRITE,
-        workspace: str | Path | None = None,
+        workspace: str | Path | WorkspaceState | None = None,
         approval_callback: ApprovalCallback | None = None,
     ):
         self.mode = PermissionMode(mode)
-        self.workspace = (
-            Path(workspace) if workspace is not None else Path.cwd()
-        ).expanduser().resolve()
+        self.workspace_state = (
+            workspace
+            if isinstance(workspace, WorkspaceState)
+            else WorkspaceState(workspace or Path.cwd())
+        )
         self.approval_callback = approval_callback
+        self._session_rules: set[str] = set()
 
-    def evaluate(self, tool_name: str, arguments: dict) -> PolicyDecision:
+    @property
+    def workspace(self) -> Path:
+        return self.workspace_state.root
+
+    def evaluate(self, tool: Tool | str, arguments: dict) -> PolicyDecision:
+        tool_name = tool.name if isinstance(tool, Tool) else str(tool)
+        effects = (
+            tool.effects
+            if isinstance(tool, Tool)
+            else self._BUILTIN_EFFECTS.get(tool_name, frozenset())
+        )
+
+        # A missing declaration is never silently treated as safe.  Interactive
+        # callers may approve once; headless callers have no callback and deny.
+        if not effects:
+            return PolicyDecision(
+                Decision.ASK,
+                "tool has no declared effects",
+                RiskClass.UNKNOWN,
+            )
+
+        if tool_name == "bash":
+            return self._evaluate_bash(str(arguments.get("command", "")))
+
         if self.mode == PermissionMode.FULL_ACCESS:
-            risk, detail = (
-                self.classify_shell(str(arguments.get("command", "")))
-                if tool_name == "bash"
-                else (RiskClass.UNKNOWN, "non-shell tool")
-            )
             return PolicyDecision(
                 Decision.ALLOW,
-                f"full-access mode: {detail}",
-                risk,
+                "full-access mode permits declared effects",
+                self._risk_for_effects(effects),
             )
 
-        if tool_name in self._READ_TOOLS:
+        if effects <= {Effect.READ_FS}:
             return PolicyDecision(
                 Decision.ALLOW,
-                "read-only tool",
+                "declared read-only effects",
                 RiskClass.READ_ONLY,
             )
 
-        if tool_name == "memory_save":
+        if Effect.APP_STATE_WRITE in effects:
             if self.mode == PermissionMode.READ_ONLY:
                 return PolicyDecision(
                     Decision.DENY,
-                    "memory writes disabled in read-only mode",
+                    "application-state writes disabled in read-only mode",
                     RiskClass.WORKSPACE_EXECUTION,
                 )
-            return PolicyDecision(
-                Decision.ALLOW,
-                "agent state write",
-                RiskClass.WORKSPACE_EXECUTION,
-            )
 
-        if tool_name in self._WRITE_TOOLS:
+        if Effect.WRITE_FS in effects:
             if self.mode == PermissionMode.READ_ONLY:
                 return PolicyDecision(
                     Decision.DENY,
@@ -147,24 +187,64 @@ class ExecutionPolicy:
                 RiskClass.WORKSPACE_EXECUTION,
             )
 
-        if tool_name == "bash":
-            return self._evaluate_bash(str(arguments.get("command", "")))
+        if Effect.NETWORK in effects or Effect.EXECUTE in effects:
+            if self.mode == PermissionMode.READ_ONLY:
+                return PolicyDecision(
+                    Decision.DENY,
+                    "execution or network effects are disabled in read-only mode",
+                    self._risk_for_effects(effects),
+                )
+            return PolicyDecision(
+                Decision.ASK,
+                "declared execution or network effect requires approval",
+                self._risk_for_effects(effects),
+            )
 
-        # Custom tools remain compatible, but their policy should be supplied
-        # explicitly by applications that expose side effects.
         return PolicyDecision(
             Decision.ALLOW,
-            "custom tool (unclassified)",
-            RiskClass.UNKNOWN,
+            "declared application-state effect",
+            self._risk_for_effects(effects),
         )
 
-    def authorize(self, tool_name: str, arguments: dict) -> PolicyDecision:
-        decision = self.evaluate(tool_name, arguments)
+    def authorize(self, tool: Tool | str, arguments: dict) -> PolicyDecision:
+        tool_name = tool.name if isinstance(tool, Tool) else str(tool)
+        effects = (
+            tool.effects
+            if isinstance(tool, Tool)
+            else self._BUILTIN_EFFECTS.get(tool_name, frozenset())
+        )
+        decision = self.evaluate(tool, arguments)
         if decision.decision != Decision.ASK:
             return decision
-        if self.approval_callback and self.approval_callback(
-            tool_name, arguments, decision.reason
-        ):
+        rule = self.reusable_rule(tool, arguments, decision)
+        if rule and rule in self._session_rules:
+            return PolicyDecision(
+                Decision.ALLOW,
+                f"session rule approved: {decision.reason}",
+                decision.risk,
+            )
+        approved = False
+        session = False
+        if self.approval_callback:
+            request = ApprovalRequest(
+                tool=tool_name,
+                arguments=dict(arguments),
+                reason=decision.reason,
+                effects=tuple(sorted(effects, key=lambda item: item.value)),
+                risk=decision.risk,
+                cwd=str(self.workspace_state.cwd),
+                reusable_rule=rule,
+            )
+            try:
+                choice = self.approval_callback(request)
+            except TypeError:
+                choice = self.approval_callback(tool_name, arguments, decision.reason)
+            value = getattr(choice, "value", choice)
+            approved = value in {True, "once", "session", "allow", "yes"}
+            session = value == "session"
+        if approved:
+            if session and rule:
+                self._session_rules.add(rule)
             return PolicyDecision(
                 Decision.ALLOW,
                 f"user approved: {decision.reason}",
@@ -177,15 +257,37 @@ class ExecutionPolicy:
         )
 
     def _inside_workspace(self, target: str) -> bool:
-        path = Path(target).expanduser()
-        if not path.is_absolute():
-            path = self.workspace / path
-        resolved = path.resolve(strict=False)
-        try:
-            resolved.relative_to(self.workspace)
-            return True
-        except ValueError:
-            return False
+        return self.workspace_state.contains(target)
+
+    @staticmethod
+    def _risk_for_effects(effects: frozenset[Effect]) -> RiskClass:
+        if Effect.NETWORK in effects:
+            return RiskClass.NETWORK
+        if Effect.EXECUTE in effects:
+            return RiskClass.WORKSPACE_EXECUTION
+        if Effect.WRITE_FS in effects or Effect.APP_STATE_WRITE in effects:
+            return RiskClass.WORKSPACE_EXECUTION
+        if effects <= {Effect.READ_FS}:
+            return RiskClass.READ_ONLY
+        return RiskClass.UNKNOWN
+
+    def reusable_rule(
+        self,
+        tool: Tool | str,
+        arguments: dict,
+        decision: PolicyDecision | None = None,
+    ) -> str | None:
+        """Return an exact, displayable rule or ``None`` when unsafe to reuse."""
+        name = tool.name if isinstance(tool, Tool) else str(tool)
+        if name != "bash":
+            return None
+        command = str(arguments.get("command", "")).strip()
+        if not command or "\n" in command:
+            return None
+        risk = (decision or self.evaluate(tool, arguments)).risk
+        if risk in {RiskClass.DESTRUCTIVE, RiskClass.UNKNOWN}:
+            return None
+        return f"bash exact: {command}"
 
     def _evaluate_bash(self, command: str) -> PolicyDecision:
         if not command.strip():
@@ -195,13 +297,9 @@ class ExecutionPolicy:
                 RiskClass.UNKNOWN,
             )
         risk, detail = self.classify_shell(command)
+        if self.mode == PermissionMode.FULL_ACCESS:
+            return PolicyDecision(Decision.ALLOW, f"full-access mode: {detail}", risk)
         if self.mode == PermissionMode.WORKSPACE_WRITE:
-            if risk in {RiskClass.READ_ONLY, RiskClass.VALIDATION}:
-                return PolicyDecision(
-                    Decision.ALLOW,
-                    detail,
-                    risk,
-                )
             return PolicyDecision(
                 Decision.ASK,
                 f"{detail}; shell command requires approval",
@@ -295,6 +393,8 @@ class ExecutionPolicy:
             ):
                 return RiskClass.WORKSPACE_EXECUTION, "find executes another command"
             return RiskClass.READ_ONLY, f"allowlisted read-only command: {executable}"
+        if executable == "cd":
+            return RiskClass.WORKSPACE_EXECUTION, "logical workspace directory change"
         if executable in cls._VALIDATION_COMMANDS:
             return RiskClass.VALIDATION, f"workspace test execution: {executable}"
         if (

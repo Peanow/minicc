@@ -16,7 +16,7 @@ from corecoder.observability import (
     ObservabilityError,
     PhoenixManager,
 )
-from corecoder.tools.base import Tool
+from corecoder.tools.base import Effect, Tool
 from corecoder.trace import (
     CompositeTraceSink,
     InMemoryTraceSink,
@@ -26,6 +26,7 @@ from corecoder.trace import (
 
 
 class EchoTool(Tool):
+    effects = frozenset({Effect.READ_FS})
     name = "echo"
     description = "Echo text."
     parameters = {
@@ -102,8 +103,8 @@ def test_each_agent_task_has_a_new_run_in_the_same_session():
     sink = InMemoryTraceSink(session_id="session-1")
     agent = Agent(llm=DoneLLM(), tools=[], trace=sink)
 
-    agent.chat("first")
-    agent.chat("second")
+    agent.run("first")
+    agent.run("second")
 
     starts = [event for event in sink.events if event["event"] == "run_started"]
     assert len({event["run_id"] for event in starts}) == 2
@@ -118,8 +119,12 @@ def test_failed_and_cancelled_tasks_close_the_run(exception, status):
     sink = InMemoryTraceSink()
     agent = Agent(llm=RaisingLLM(exception), tools=[], trace=sink)
 
-    with pytest.raises(type(exception)):
-        agent.chat("fail")
+    if isinstance(exception, KeyboardInterrupt):
+        with pytest.raises(KeyboardInterrupt):
+            agent.run("fail")
+    else:
+        result = agent.run("fail")
+        assert result.status == "error"
 
     finished = [event for event in sink.events if event["event"] == "run_finished"]
     assert len(finished) == 1
@@ -129,7 +134,7 @@ def test_failed_and_cancelled_tasks_close_the_run(exception, status):
 def test_max_rounds_closes_the_run():
     sink = InMemoryTraceSink()
     agent = Agent(llm=DoneLLM(), tools=[], trace=sink, max_rounds=0)
-    assert agent.chat("stop") == "(reached maximum tool-call rounds)"
+    assert agent.run("stop").final_answer == "(reached maximum tool-call rounds)"
     assert sink.events[-1]["event"] == "run_finished"
     assert sink.events[-1]["data"]["status"] == "max_rounds"
 
@@ -162,7 +167,7 @@ def test_otel_sink_builds_agent_llm_and_tool_span_tree():
     )
     agent = Agent(llm=ToolLLM(), tools=[EchoTool()], trace=sink)
 
-    assert agent.chat("use echo") == "done"
+    assert agent.run("use echo").final_answer == "done"
     sink.close()
 
     spans = exporter.get_finished_spans()
@@ -191,7 +196,7 @@ def test_otel_metadata_only_omits_content():
         exporter=exporter,
     )
     agent = Agent(llm=DoneLLM(), tools=[], trace=sink)
-    agent.chat("private prompt")
+    agent.run("private prompt")
     sink.close()
 
     spans = exporter.get_finished_spans()
@@ -207,7 +212,7 @@ def test_parallel_same_name_tools_close_distinct_spans():
     exporter = InMemorySpanExporter()
     sink = OpenTelemetryTraceSink("http://unused", exporter=exporter)
     agent = Agent(llm=ParallelToolLLM(), tools=[ParallelEchoTool()], trace=sink)
-    agent.chat("parallel")
+    agent.run("parallel")
     sink.close()
 
     tools = [

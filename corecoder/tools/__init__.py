@@ -1,9 +1,4 @@
-"""Tool registry.
-
-``ALL_TOOLS`` and ``get_tool`` remain as compatibility helpers. Agent
-instances use a private :class:`ToolRegistry` so wiring a skill, memory, or
-sub-agent tool cannot leak state into another agent.
-"""
+"""Instance-local tool construction and lookup."""
 
 from collections.abc import Iterable
 
@@ -17,34 +12,34 @@ from .agent import AgentTool
 from .skill import SkillTool
 from .memory_search import MemorySearchTool
 from .memory_save import MemorySaveTool
-from .edit import _changed_files
-
-def build_default_tools(changed_files: set[str] | None = None):
+def build_default_tools(workspace=None):
     """Create a fresh set of built-in tools."""
-    changed_files = changed_files if changed_files is not None else set()
+    changed_files: set[str] = set()
     return [
-        BashTool(),
-        ReadFileTool(),
-        WriteFileTool(changed_files),
-        EditFileTool(changed_files),
-        GlobTool(),
-        GrepTool(),
-        AgentTool(),
-        SkillTool(),
-        MemorySearchTool(),
-        MemorySaveTool(),
+        BashTool(workspace),
+        ReadFileTool(workspace),
+        WriteFileTool(changed_files, workspace),
+        EditFileTool(changed_files, workspace),
+        GlobTool(workspace),
+        GrepTool(workspace),
+        AgentTool(workspace),
+        SkillTool(workspace),
+        MemorySearchTool(workspace),
+        MemorySaveTool(workspace),
     ]
 
 
 class ToolRegistry:
     """An ordered, instance-local registry of tools."""
 
-    def __init__(self, tools: Iterable | None = None):
-        items = list(tools) if tools is not None else build_default_tools()
+    def __init__(self, tools: Iterable | None = None, *, workspace=None):
+        items = list(tools) if tools is not None else build_default_tools(workspace)
         self._tools = {}
         for tool in items:
             if tool.name in self._tools:
                 raise ValueError(f"duplicate tool name: {tool.name}")
+            if workspace is not None:
+                tool.bind_workspace(workspace)
             self._tools[tool.name] = tool
 
     def get(self, name: str):
@@ -70,14 +65,4 @@ class ToolRegistry:
         return changed
 
 
-# Backward-compatible global tools for library users that imported these
-# helpers before ToolRegistry existed.
-ALL_TOOLS = build_default_tools(_changed_files)
-
-
-def get_tool(name: str):
-    """Look up a tool in the legacy global registry."""
-    for t in ALL_TOOLS:
-        if t.name == name:
-            return t
-    return None
+__all__ = ["ToolRegistry", "build_default_tools"]

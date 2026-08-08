@@ -521,18 +521,18 @@ def test_agent_on_demand_injection(tmp_path, monkeypatch):
 def test_system_prompt_with_memory_directory():
     """System prompt includes memory directory section."""
     from corecoder.prompt import system_prompt
-    from corecoder.tools import ALL_TOOLS
+    from corecoder.tools import build_default_tools
 
-    prompt = system_prompt(ALL_TOOLS, memory_context="# Memory\nYou have 3 memory items. Use memory_search.")
+    prompt = system_prompt(build_default_tools(), memory_context="# Memory\nYou have 3 memory items. Use memory_search.")
     assert "Memory" in prompt
     assert "memory_search" in prompt
 
 
 def test_system_prompt_no_memory():
     from corecoder.prompt import system_prompt
-    from corecoder.tools import ALL_TOOLS
+    from corecoder.tools import build_default_tools
 
-    prompt = system_prompt(ALL_TOOLS, memory_context="")
+    prompt = system_prompt(build_default_tools(), memory_context="")
     assert "Memory" not in prompt
 
 

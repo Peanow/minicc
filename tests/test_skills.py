@@ -15,7 +15,7 @@ from corecoder.skills import (
     _find_skills_dir,
 )
 from corecoder.prompt import system_prompt
-from corecoder.tools import ALL_TOOLS
+from corecoder.tools import build_default_tools
 
 
 # ---------------------------------------------------------------------------
@@ -271,7 +271,7 @@ class TestFindSkillByName:
 
 class TestSystemPromptWithSkills:
     def test_no_skills(self):
-        prompt = system_prompt(ALL_TOOLS)
+        prompt = system_prompt(build_default_tools())
         assert "# Skills" not in prompt
 
     def test_directory_only_in_system_prompt(self):
@@ -279,7 +279,7 @@ class TestSystemPromptWithSkills:
         skills = [
             Skill(name="python", description="Python expert", content="Use type hints. Prefer dataclasses."),
         ]
-        prompt = system_prompt(ALL_TOOLS, skills=skills)
+        prompt = system_prompt(build_default_tools(), skills=skills)
         assert "# Skills" in prompt
         assert "python" in prompt
         assert "Python expert" in prompt
@@ -289,6 +289,6 @@ class TestSystemPromptWithSkills:
 
     def test_existing_sections_preserved(self):
         skills = [Skill(name="x", description="", content="Content")]
-        prompt = system_prompt(ALL_TOOLS, skills=skills)
+        prompt = system_prompt(build_default_tools(), skills=skills)
         assert "# Tools" in prompt
         assert "# Rules" in prompt

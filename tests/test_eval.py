@@ -324,6 +324,7 @@ def test_eval_cli_dry_run_needs_no_api_key(monkeypatch, capsys):
         "sys.argv",
         [
             "corecoder",
+            "lab",
             "eval",
             str(MANIFEST_PATH),
             "--dry-run",

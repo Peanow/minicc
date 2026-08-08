@@ -2,7 +2,7 @@
 
 import re
 from pathlib import Path
-from .base import Tool
+from .base import Effect, Tool, ToolResult
 
 # skip these dirs to avoid noise
 _SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".tox", "dist", "build"}
@@ -10,6 +10,7 @@ _SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".tox", "d
 
 class GrepTool(Tool):
     parallel_safe = True
+    effects = frozenset({Effect.READ_FS})
     name = "grep"
     description = (
         "Search file contents with regex. "
@@ -34,15 +35,18 @@ class GrepTool(Tool):
         "required": ["pattern"],
     }
 
-    def execute(self, pattern: str, path: str = ".", include: str | None = None) -> str:
+    def execute(self, pattern: str, path: str = ".", include: str | None = None) -> ToolResult:
         try:
             regex = re.compile(pattern)
         except re.error as e:
-            return f"Invalid regex: {e}"
+            return ToolResult.error(f"Invalid regex: {e}", error_type="InvalidRegex")
 
-        base = Path(path).expanduser().resolve()
+        try:
+            base = self.resolve_path(path, require_inside=True)
+        except Exception as e:
+            return ToolResult.error(str(e), error_type=type(e).__name__)
         if not base.exists():
-            return f"Error: {path} not found"
+            return ToolResult.error(f"{path} not found", error_type="FileNotFoundError")
 
         if base.is_file():
             files = [base]
@@ -51,6 +55,11 @@ class GrepTool(Tool):
 
         matches = []
         for fp in files:
+            # A directory can contain symlinks that resolve outside the
+            # workspace.  Keep the same resolved-path boundary as Read/Glob
+            # instead of exposing those files through recursive search.
+            if self.workspace is not None and not self.workspace.contains(fp):
+                continue
             try:
                 text = fp.read_text(errors="ignore")
             except OSError:
@@ -60,9 +69,9 @@ class GrepTool(Tool):
                     matches.append(f"{fp}:{lineno}: {line.rstrip()}")
                     if len(matches) >= 200:
                         matches.append("... (200 match limit reached)")
-                        return "\n".join(matches)
+                        return ToolResult.success("\n".join(matches))
 
-        return "\n".join(matches) if matches else "No matches found."
+        return ToolResult.success("\n".join(matches) if matches else "No matches found.")
 
     @staticmethod
     def _walk(root: Path, include: str | None) -> list[Path]:

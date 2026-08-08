@@ -7,15 +7,12 @@ and makes edits safe and reviewable.
 """
 
 import difflib
-from pathlib import Path
 
-from .base import Tool
-
-# track files changed this session for /diff
-_changed_files: set[str] = set()
+from .base import Effect, Tool, ToolResult
 
 
 class EditFileTool(Tool):
+    effects = frozenset({Effect.WRITE_FS})
     name = "edit_file"
     description = (
         "Edit a file by replacing an exact string match. "
@@ -41,28 +38,30 @@ class EditFileTool(Tool):
         "required": ["file_path", "old_string", "new_string"],
     }
 
-    def __init__(self, changed_files: set[str] | None = None):
-        self.changed_files = changed_files if changed_files is not None else _changed_files
+    def __init__(self, changed_files: set[str] | None = None, workspace=None):
+        super().__init__(workspace)
+        self.changed_files = changed_files if changed_files is not None else set()
 
-    def execute(self, file_path: str, old_string: str, new_string: str) -> str:
+    def execute(self, file_path: str, old_string: str, new_string: str) -> ToolResult:
         try:
-            p = Path(file_path).expanduser().resolve()
+            p = self.resolve_path(file_path, require_inside=True)
             if not p.exists():
-                return f"Error: {file_path} not found"
+                return ToolResult.error(f"{file_path} not found", error_type="FileNotFoundError")
 
             content = p.read_text()
             occurrences = content.count(old_string)
 
             if occurrences == 0:
                 preview = content[:500] + ("..." if len(content) > 500 else "")
-                return (
-                    f"Error: old_string not found in {file_path}.\n"
-                    f"File starts with:\n{preview}"
+                return ToolResult.error(
+                    f"old_string not found in {file_path}.\nFile starts with:\n{preview}",
+                    error_type="MatchNotFound",
                 )
             if occurrences > 1:
-                return (
-                    f"Error: old_string appears {occurrences} times in {file_path}. "
-                    f"Include more surrounding lines to make it unique."
+                return ToolResult.error(
+                    f"old_string appears {occurrences} times in {file_path}. "
+                    "Include more surrounding lines to make it unique.",
+                    error_type="AmbiguousMatch",
                 )
 
             new_content = content.replace(old_string, new_string, 1)
@@ -71,9 +70,13 @@ class EditFileTool(Tool):
 
             # generate a unified diff so the user/LLM can see exactly what changed
             diff = _unified_diff(content, new_content, str(p))
-            return f"Edited {file_path}\n{diff}"
+            return ToolResult.success(
+                f"Edited {file_path}\n{diff}",
+                changed_files=(str(p),),
+                diff=diff or None,
+            )
         except Exception as e:
-            return f"Error: {e}"
+            return ToolResult.error(str(e), error_type=type(e).__name__)
 
 
 def _unified_diff(old: str, new: str, filename: str, context: int = 3) -> str:

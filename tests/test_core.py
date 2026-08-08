@@ -3,14 +3,15 @@
 import os
 import pathlib
 
-from corecoder import Agent, LLM, Config, ALL_TOOLS, ToolRegistry, __version__
+from corecoder import Agent, LLM, Config, ToolRegistry, build_default_tools, __version__
 from corecoder.context import ContextManager, estimate_tokens
+from corecoder.runtime import WorkspaceState
 from corecoder.session import save_session, load_session, list_sessions
-from corecoder.tools import get_tool
+from corecoder.tools import ToolRegistry
 
 
 def test_version():
-    assert __version__ == "0.3.0"
+    assert __version__ == "0.4.0"
 
 
 def test_public_api_exports():
@@ -19,7 +20,7 @@ def test_public_api_exports():
     assert LLM is not None
     assert Config is not None
     assert ToolRegistry is not None
-    assert len(ALL_TOOLS) == 10
+    assert len(build_default_tools()) == 10
 
 
 def test_config_from_env():
@@ -146,21 +147,17 @@ def test_cost_estimation_unknown_model():
 # --- Changed files tracking ---
 
 def test_edit_tracks_changed_files(tmp_path):
-    from corecoder.tools.edit import _changed_files
-    _changed_files.clear()
-    edit = get_tool("edit_file")
+    registry = ToolRegistry(workspace=WorkspaceState(tmp_path))
+    edit = registry.get("edit_file")
     path = tmp_path / "sample.py"
     path.write_text("aaa\nbbb\n")
     edit.execute(file_path=str(path), old_string="aaa", new_string="zzz")
-    assert any(str(path) in p for p in _changed_files)
-    _changed_files.clear()
+    assert any(str(path) in p for p in registry.changed_files)
 
 
 def test_write_tracks_changed_files(tmp_path):
-    from corecoder.tools.edit import _changed_files
-    _changed_files.clear()
-    write = get_tool("write_file")
+    registry = ToolRegistry(workspace=WorkspaceState(tmp_path))
+    write = registry.get("write_file")
     path = tmp_path / "tracked.txt"
     write.execute(file_path=str(path), content="tracked\n")
-    assert any("tracked" not in p and path.name in p for p in _changed_files) or len(_changed_files) > 0
-    _changed_files.clear()
+    assert any(path.name in p for p in registry.changed_files)

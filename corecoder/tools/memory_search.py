@@ -11,10 +11,11 @@ Search flow:
     3. Merge with FTS5 keyword results
 """
 
-from .base import Tool
+from .base import Effect, Tool, ToolResult
 
 
 class MemorySearchTool(Tool):
+    effects = frozenset({Effect.READ_FS})
     name = "memory_search"
     description = (
         "Search cross-session memory for relevant context from previous "
@@ -40,31 +41,20 @@ class MemorySearchTool(Tool):
     # set by Agent.__init__ after construction
     _agent = None
 
-    def execute(self, query: str, limit: int = 10) -> str:
+    def execute(self, query: str, limit: int = 10) -> ToolResult:
         if self._agent is None:
-            return "Error: memory search not initialized (no agent)"
-
-        from ..memory import MemoryStore, get_project_name
-
-        project = get_project_name()
-        store = MemoryStore(embedding_dims=self._agent.embedding.dims)
-        try:
-            # embed the query for semantic search
-            query_emb = (
-                self._agent.embedding.embed(query)
-                if self._agent.embedding.is_available()
-                else None
+            return ToolResult.error(
+                "memory search not initialized (no agent)",
+                error_type="NotInitialized",
             )
 
-            if query_emb:
-                results = store.hybrid_search(project, query, query_emb, limit=limit)
-            else:
-                results = store.search(project, query, limit=limit)
-        finally:
-            store.close()
+        try:
+            results = self._agent.memory_service.search(query, limit=limit)
+        except Exception as exc:
+            return ToolResult.error(str(exc), error_type=type(exc).__name__)
 
         if not results:
-            return f"No memories found for query: {query}"
+            return ToolResult.success(f"No memories found for query: {query}")
 
         lines = [f"Found {len(results)} memory item(s) for '{query}':\n"]
         for obs in results:
@@ -75,4 +65,4 @@ class MemorySearchTool(Tool):
                 lines.append(f"  Files: {', '.join(obs.files[:5])}")
             lines.append("")
 
-        return "\n".join(lines)
+        return ToolResult.success("\n".join(lines))

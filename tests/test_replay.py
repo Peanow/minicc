@@ -137,7 +137,7 @@ def test_replay_cli_does_not_require_api_configuration(tmp_path, monkeypatch, ca
 
     path = tmp_path / "run.jsonl"
     _write_complete_trace(path)
-    monkeypatch.setattr("sys.argv", ["corecoder", "replay", str(path)])
+    monkeypatch.setattr("sys.argv", ["corecoder", "trace", "replay", str(path)])
 
     main()
 
@@ -151,7 +151,7 @@ def test_report_cli_uses_default_output_path(tmp_path, monkeypatch):
 
     path = tmp_path / "run.jsonl"
     _write_complete_trace(path)
-    monkeypatch.setattr("sys.argv", ["corecoder", "report", str(path)])
+    monkeypatch.setattr("sys.argv", ["corecoder", "trace", "report", str(path)])
 
     main()
 

@@ -1,11 +1,11 @@
 """File reading with line numbers."""
 
-from pathlib import Path
-from .base import Tool
+from .base import Effect, Tool, ToolResult
 
 
 class ReadFileTool(Tool):
     parallel_safe = True
+    effects = frozenset({Effect.READ_FS})
     name = "read_file"
     description = (
         "Read a file's contents with line numbers. "
@@ -30,13 +30,16 @@ class ReadFileTool(Tool):
         "required": ["file_path"],
     }
 
-    def execute(self, file_path: str, offset: int = 1, limit: int = 2000) -> str:
+    def execute(self, file_path: str, offset: int = 1, limit: int = 2000) -> ToolResult:
         try:
-            p = Path(file_path).expanduser().resolve()
+            p = self.resolve_path(file_path, require_inside=True)
             if not p.exists():
-                return f"Error: {file_path} not found"
+                return ToolResult.error(f"{file_path} not found", error_type="FileNotFoundError")
             if not p.is_file():
-                return f"Error: {file_path} is a directory, not a file"
+                return ToolResult.error(
+                    f"{file_path} is a directory, not a file",
+                    error_type="IsADirectoryError",
+                )
 
             text = p.read_text(errors="replace")
             lines = text.splitlines()
@@ -49,6 +52,6 @@ class ReadFileTool(Tool):
 
             if total > start + limit:
                 result += f"\n... ({total} lines total, showing {start+1}-{start+len(chunk)})"
-            return result or "(empty file)"
+            return ToolResult.success(result or "(empty file)")
         except Exception as e:
-            return f"Error: {e}"
+            return ToolResult.error(str(e), error_type=type(e).__name__)

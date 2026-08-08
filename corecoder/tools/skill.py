@@ -10,10 +10,11 @@ simplified to a single parameter and pure prompt injection (no fork
 context, no argument substitution, no lifecycle hooks).
 """
 
-from .base import Tool
+from .base import Effect, Tool, ToolResult
 
 
 class SkillTool(Tool):
+    effects = frozenset({Effect.APP_STATE_WRITE})
     name = "skill"
     description = (
         "Activate a skill by name. The skill's full instructions will be "
@@ -35,16 +36,19 @@ class SkillTool(Tool):
     # set by Agent.__init__ after construction
     _agent = None
 
-    def execute(self, name: str) -> str:
+    def execute(self, name: str) -> ToolResult:
         if self._agent is None:
-            return "Error: skill tool not initialized"
+            return ToolResult.error("skill tool not initialized", error_type="NotInitialized")
 
         from ..skills import find_skill_by_name, format_skill_invocation
 
         skill = find_skill_by_name(self._agent.skills, name)
         if skill is None:
             available = ", ".join(s.name for s in self._agent.skills) or "none"
-            return f"Skill '{name}' not found. Available skills: {available}"
+            return ToolResult.error(
+                f"Skill '{name}' not found. Available skills: {available}",
+                error_type="SkillNotFound",
+            )
 
         # Record activation so we know it's active this session
         self._agent.active_skills.add(skill.name)
@@ -57,4 +61,4 @@ class SkillTool(Tool):
                 activation="tool",
             )
 
-        return format_skill_invocation(skill)
+        return ToolResult.success(format_skill_invocation(skill))

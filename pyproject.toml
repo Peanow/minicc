@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "corecoder"
-version = "0.3.0"
+version = "0.4.0"
 description = "Observable, multi-model coding agent experimentation fork of CoreCoder."
 readme = "README.md"
 license = "MIT"
@@ -45,7 +45,7 @@ observability = [
     "opentelemetry-sdk>=1.27,<2",
     "opentelemetry-exporter-otlp-proto-http>=1.27,<2",
 ]
-dev = ["pytest>=7.0"]
+dev = ["pytest>=7.0", "ruff>=0.8"]
 
 [project.scripts]
 corecoder = "corecoder.cli:main"
