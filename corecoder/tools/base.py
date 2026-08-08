@@ -109,9 +109,14 @@ class Tool(ABC):
 
     def __init__(self, workspace: WorkspaceState | None = None):
         self.workspace = workspace
+        self.trace = None
 
     def bind_workspace(self, workspace: WorkspaceState) -> None:
         self.workspace = workspace
+
+    def bind_trace(self, trace) -> None:
+        """Attach the Agent-owned trace sink to an instance-local tool."""
+        self.trace = trace
 
     def resolve_path(
         self,

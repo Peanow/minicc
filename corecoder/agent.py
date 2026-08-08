@@ -67,6 +67,7 @@ class Agent:
         app_paths: AppPaths | None = None,
         memory_service: MemoryService | None = None,
         ephemeral: bool = False,
+        sandbox_network: str = "deny",
     ) -> None:
         if isinstance(workspace, WorkspaceState):
             self.workspace = workspace
@@ -91,6 +92,14 @@ class Agent:
         self.policy.workspace_state = self.workspace
         self.tool_registry = ToolRegistry(tools, workspace=self.workspace)
         self.tools = self.tool_registry.values()
+        for tool in self.tools:
+            configure_sandbox = getattr(tool, "configure_sandbox", None)
+            if callable(configure_sandbox):
+                configure_sandbox(
+                    permission_mode=self.policy.mode.value,
+                    network=sandbox_network,
+                )
+            tool.bind_trace(self.trace)
         self.skills = list(skills or [])
         self.hooks = hooks or HookConfig()
         self.embedding = embedding or EmbeddingService(provider="none")

@@ -174,6 +174,8 @@ corecoder run '修复测试' --format jsonl > events.jsonl
 corecoder --permission-mode read-only
 corecoder --permission-mode workspace-write
 corecoder --permission-mode full-access
+corecoder --sandbox-network deny
+corecoder --sandbox-network allow
 ```
 
 工具必须声明 Effect：
@@ -185,11 +187,17 @@ READ_FS | WRITE_FS | EXECUTE | NETWORK | APP_STATE_WRITE
 - `read-only` 允许读取，禁止 workspace、memory 和应用状态写入。
 - `workspace-write` 允许 workspace 内文件修改；执行、联网和未知 Effect
   需要交互审批，非交互模式拒绝。
-- `full-access` 仍会经过工具自身的危险命令检查。
+- `full-access` 显式绕过 Bash 的 OS sandbox，但仍会经过工具自身的危险命令检查。
 - 只有显式 `parallel_safe` 且完全只读的工具可以并行执行。
 
-这些检查是应用权限策略，不是 OS sandbox。处理不可信代码时，请额外使用
-容器、虚拟机或操作系统级隔离。
+- Bash 默认使用 macOS `sandbox-exec` 将文件系统访问限制在 Agent 启动时的
+  workspace，并默认禁止网络。`--sandbox-network allow` 或
+  `CORECODER_SANDBOX_NETWORK=allow` 只解除 OS 网络限制，仍不会绕过 Policy
+  审批。
+- 应用层权限检查和 OS sandbox 是两层边界。沙箱覆盖 Agent 运行时的
+  BashTool；直接调用任意 Python/subprocess API 仍不自动受保护。macOS 之外
+  或找不到可用 OS sandbox 时，sandbox-required 的 Bash 执行会失败关闭，不会
+  静默降级。
 
 审批卡片会展示 Effect、风险、cwd、完整脱敏命令和目标路径。可选操作为
 一次允许、拒绝、查看详情；只有 Policy 能生成精确规则时才会提供 session

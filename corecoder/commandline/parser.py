@@ -39,7 +39,13 @@ def _runtime_options(
         "--permission-mode",
         default=default,
         choices=[mode.value for mode in PermissionMode],
-        help="application tool policy (not an OS sandbox)",
+        help="application tool policy; Bash also uses an OS sandbox",
+    )
+    parser.add_argument(
+        "--sandbox-network",
+        default=default,
+        choices=("allow", "deny"),
+        help="Bash OS sandbox network access (default: deny)",
     )
     parser.add_argument(
         "--context-strategy",

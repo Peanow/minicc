@@ -22,6 +22,7 @@ class EventKind(str, Enum):
     TOOL_FINISHED = "tool_finished"
     CONTEXT_COMPACTED = "context_compacted"
     RUN_FINISHED = "run_finished"
+    SANDBOX_DECISION = "sandbox_decision"
 
 
 @dataclass(frozen=True)

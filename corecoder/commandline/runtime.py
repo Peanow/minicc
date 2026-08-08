@@ -37,6 +37,7 @@ def apply_runtime_options(config: Config, args: Any) -> Config:
         ("model", "model"),
         ("base_url", "base_url"),
         ("permission_mode", "permission_mode"),
+        ("sandbox_network", "sandbox_network"),
         ("context_strategy", "context_strategy"),
         ("tokenizer", "tokenizer_provider"),
     ):
@@ -275,6 +276,7 @@ def build_runtime(
         "trace": trace,
         "policy": policy,
         "context_strategy": context,
+        "sandbox_network": config.sandbox_network,
     }
     try:
         agent = Agent(**_filter_kwargs(Agent, agent_values))

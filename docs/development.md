@@ -59,7 +59,9 @@ Agent ── ModelGateway ── LLM provider
 - 工具实现返回 `ToolResult`，不要用 `"Error"`、`"Blocked"` 等文本判断
   成功与否。
 - 只有 `parallel_safe=True` 且 Effect 完全为 `READ_FS` 的工具可以并行。
-- 权限是应用策略，不是 OS sandbox；这条边界必须在代码和文档中保持明确。
+- 权限策略负责应用层审批；Agent-owned Bash 另外使用实例级 OS sandbox，
+  默认以物理 workspace 为边界并拒绝网络。直接 Python/subprocess 调用仍不
+  自动受保护，这条边界必须在代码和文档中保持明确。
 
 ### 事件和 Trace
 
@@ -214,5 +216,6 @@ python scripts/spec.py archive 001-short-slug
 ## 6. 0.4 的刻意暂缓项
 
 不要在普通修复中顺手引入全屏 Textual TUI、MCP、Worktree、Agent Teams、
-自动 Git commit/undo、TOML/keyring 或 OS sandbox。它们如果未来启动，必须
-单独开 SDD change，先定义可观察边界、迁移策略和回滚路径。
+自动 Git commit/undo 或 TOML/keyring。OS sandbox 已由 014 change 定义；
+后续扩大其平台或覆盖范围仍必须单独开 SDD change，先定义可观察边界、
+迁移策略和回滚路径。

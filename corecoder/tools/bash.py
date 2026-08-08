@@ -10,7 +10,10 @@ Claude Code's BashTool is 1,143 lines. This is the distilled version:
 import re
 import shlex
 import subprocess
+from pathlib import Path
+
 from .base import Effect, Tool, ToolResult
+from .sandbox import SandboxExecutor, SandboxUnavailable
 
 # patterns that could wreck the filesystem or leak secrets
 _DANGEROUS_PATTERNS = [
@@ -48,8 +51,56 @@ class BashTool(Tool):
         "required": ["command"],
     }
 
-    def __init__(self, workspace=None):
+    def __init__(
+        self,
+        workspace=None,
+        *,
+        permission_mode: str = "workspace-write",
+        network: str = "deny",
+        trace=None,
+    ):
         super().__init__(workspace)
+        self._permission_mode = permission_mode
+        self._network = network
+        self._sandbox = None
+        self._sandbox_key = None
+        # A standalone legacy tool has no Agent-owned workspace to contain.
+        # Agent composition always binds WorkspaceState before execution and
+        # therefore always takes the sandboxed path.
+        self._sandbox_required = workspace is not None
+        self.bind_trace(trace)
+
+    def bind_workspace(self, workspace) -> None:
+        super().bind_workspace(workspace)
+        self._sandbox_required = True
+        self._configure_sandbox()
+
+    def bind_trace(self, trace) -> None:
+        super().bind_trace(trace)
+        self._configure_sandbox()
+
+    def configure_sandbox(self, *, permission_mode: str, network: str) -> None:
+        self._permission_mode = permission_mode
+        self._network = network
+        self._configure_sandbox()
+
+    def _configure_sandbox(self) -> None:
+        if not self._sandbox_required:
+            self._sandbox = None
+            self._sandbox_key = None
+            return
+        workspace = self.workspace
+        root = getattr(workspace, "root", None) or Path.cwd()
+        key = (str(Path(root).expanduser().resolve()), self._permission_mode, self._network)
+        if self._sandbox is not None and self._sandbox_key == key:
+            return
+        self._sandbox = SandboxExecutor(
+            root,
+            permission_mode=self._permission_mode,
+            network=self._network,
+            trace=self.trace,
+        )
+        self._sandbox_key = key
 
     def execute(self, command: str, timeout: int = 120) -> ToolResult:
         # safety check
@@ -60,17 +111,24 @@ class BashTool(Tool):
                 "If intentional, modify the command to be more specific."
             )
 
+        if self._sandbox is None and self._sandbox_required:
+            self._configure_sandbox()
         cwd = self.workspace.cwd if self.workspace is not None else self.resolve_path(".")
 
         try:
-            proc = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                cwd=cwd,
-            )
+            if self._sandbox_required:
+                proc = self._sandbox.run(command, cwd=cwd, timeout=timeout)
+            else:
+                # Compatibility for direct, unbound tool callers.  The Agent
+                # path never reaches here because it owns a WorkspaceState.
+                proc = subprocess.run(
+                    command,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    cwd=cwd,
+                )
 
             # track cd commands so next command runs in the right place
             if proc.returncode == 0:
@@ -95,6 +153,8 @@ class BashTool(Tool):
                     exit_code=proc.returncode,
                 )
             return ToolResult.success(content, exit_code=0)
+        except SandboxUnavailable as exc:
+            return ToolResult.error(str(exc), error_type="SandboxUnavailable")
         except subprocess.TimeoutExpired:
             return ToolResult.error(
                 f"timed out after {timeout}s",

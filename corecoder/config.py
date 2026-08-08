@@ -24,6 +24,7 @@ _CONFIG_ENV_NAMES = frozenset({
     "CORECODER_EMBEDDING_MODEL",
     "CORECODER_EMBEDDING_DIMS",
     "CORECODER_PERMISSION_MODE",
+    "CORECODER_SANDBOX_NETWORK",
     "CORECODER_CONTEXT_STRATEGY",
     "CORECODER_TOKENIZER",
 })
@@ -214,6 +215,7 @@ class Config:
     embedding_model: str = "BAAI/bge-small-zh-v1.5"
     embedding_dims: int = 512
     permission_mode: str = "workspace-write"
+    sandbox_network: str = "deny"
     context_strategy: str = "hybrid"
     tokenizer_provider: str = "auto"
     # Startup metadata is intentionally non-sensitive and excluded from the
@@ -259,6 +261,7 @@ class Config:
             embedding_model=os.getenv("CORECODER_EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5"),
             embedding_dims=int(os.getenv("CORECODER_EMBEDDING_DIMS", "512")),
             permission_mode=os.getenv("CORECODER_PERMISSION_MODE", "workspace-write"),
+            sandbox_network=os.getenv("CORECODER_SANDBOX_NETWORK", "deny"),
             context_strategy=os.getenv("CORECODER_CONTEXT_STRATEGY", "hybrid"),
             tokenizer_provider=os.getenv("CORECODER_TOKENIZER", "auto"),
             config_sources=dotenv.sources,

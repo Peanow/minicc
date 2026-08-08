@@ -22,6 +22,14 @@ def test_new_command_tree_and_runtime_options_before_or_after_run():
     assert (evaluation.command, evaluation.lab_command) == ("lab", "eval")
 
 
+def test_sandbox_network_cli_option_is_available_before_and_after_run():
+    parser = build_parser()
+    before = parser.parse_args(["--sandbox-network", "allow", "run", "hello"])
+    after = parser.parse_args(["run", "hello", "--sandbox-network", "deny"])
+    assert before.sandbox_network == "allow"
+    assert after.sandbox_network == "deny"
+
+
 @pytest.mark.parametrize(
     "argv",
     [

@@ -23,6 +23,7 @@ _CONFIG_KEYS = (
     "CORECODER_EMBEDDING_MODEL",
     "CORECODER_EMBEDDING_DIMS",
     "CORECODER_PERMISSION_MODE",
+    "CORECODER_SANDBOX_NETWORK",
     "CORECODER_CONTEXT_STRATEGY",
     "CORECODER_TOKENIZER",
 )
@@ -52,6 +53,23 @@ def test_user_dotenv_can_supply_api_key(monkeypatch, tmp_path):
     assert config.model == "user-model"
     assert config.api_key_source == "user_env"
     assert config.trace_metadata()["api_key_configured"] is True
+
+
+def test_sandbox_network_configuration_sources(monkeypatch, tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.chdir(workspace)
+    _clear_config_environment(monkeypatch)
+    monkeypatch.setenv("CORECODER_SANDBOX_NETWORK", "allow")
+
+    config = Config.from_env()
+
+    assert config.sandbox_network == "allow"
+
+    from corecoder.commandline.runtime import apply_runtime_options
+
+    apply_runtime_options(config, Namespace(sandbox_network="deny"))
+    assert config.sandbox_network == "deny"
 
 
 def test_project_dotenv_overrides_user_dotenv(monkeypatch, tmp_path):
