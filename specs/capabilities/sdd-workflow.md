@@ -13,21 +13,20 @@ coverage, Given/When/Then scenarios, task mappings, pytest evidence, Trace
 evidence, and capability evidence. A change can be archived only from `DONE`
 and only when the cited capability file exists.
 
-For contract changes, the AI workflow begins with a dialogue-based Explore.
-The initial plan includes current-state evidence, goal, scope, approach,
-affected files, test strategy, risks, and unresolved questions, and requires
-the built-in ask-user confirmation (`确认并继续`, `需要调整计划`, or
-`暂不实施`) before a change is created or implementation starts. The
-confirmed plan is transferred into the formal change documents; no separate
-Explore file or CLI command is part of the workflow.
+For contract changes, plan mode is optional and the user decides whether to
+use it. When selected, the plan includes current-state evidence, goal, scope,
+approach, affected files, test strategy, risks, and unresolved questions, and
+can be adjusted before the formal change documents are created. Without plan
+mode, the workflow proceeds directly through the formal change documents.
 
 The AI must request confirmation before archiving a `DONE` change, after
 presenting strict preflight and verification evidence. After archive,
 `preflight CHANGE --for-commit` must pass before the AI presents the proposed
-files and requests commit confirmation. Commit confirmation is separate from
-archive confirmation, and `git push` is never implicit. These gates constrain
-the AI workflow only; `scripts/spec.py` retains its existing non-interactive
-commands for scripts and CI.
+files. An explicit user request to commit authorizes staging and committing
+after that preflight; no redundant commit confirmation is required. `git push`
+is never implicit. These gates constrain the AI workflow only;
+`scripts/spec.py` retains its existing non-interactive commands for scripts and
+CI.
 
 `preflight CHANGE` is a read-only strict validation and state report.
 `preflight CHANGE --for-commit` additionally requires `ARCHIVED`; an active

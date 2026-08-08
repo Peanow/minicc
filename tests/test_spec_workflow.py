@@ -343,26 +343,37 @@ def test_repository_bootstrap_change_passes_strict_validation():
     assert "000-sdd-bootstrap\tARCHIVED" in result.stdout
 
 
-def test_sdd_workflow_documents_explore_and_human_confirmation_gates():
+def test_sdd_workflow_documents_optional_plan_mode_and_human_gates():
     agents = (REPOSITORY_ROOT / "AGENTS.md").read_text(encoding="utf-8")
     readme = (REPOSITORY_ROOT / "specs" / "README.md").read_text(encoding="utf-8")
     capability = (
         REPOSITORY_ROOT / "specs" / "capabilities" / "sdd-workflow.md"
     ).read_text(encoding="utf-8")
 
-    explore = "dialogue-based Explore"
-    assert explore in agents
-    assert explore in readme
-    assert explore in capability
-    assert "built-in ask-user" in agents
-    assert "确认并继续" in readme
-    assert "需要调整计划" in readme
-    assert "暂不实施" in readme
+    assert "plan mode" in agents
+    assert "plan mode" in readme
+    assert "plan mode" in capability
+    assert "optional" in agents
+    assert "optional" in readme
+    assert "optional" in capability
+    assert "Explore" not in agents
+    assert "Explore" not in readme
+    assert "Explore" not in capability
+    assert "ask-user" not in agents
+    assert "ask-user" not in readme
+    assert "ask-user" not in capability
 
     archive_gate = "request explicit confirmation before running"
-    commit_gate = "request explicit confirmation before staging"
+    commit_authority = "explicit user request to commit"
     assert archive_gate in agents
-    assert commit_gate in agents
+    assert commit_authority in agents
+    assert "explicit user" in readme
+    assert "request to commit" in readme
+    assert "explicit user" in capability
+    assert "request to commit" in capability
+    assert "request explicit confirmation before staging" not in agents
+    assert "user confirms commit" not in readme
+    assert "commit confirmation is separate" not in capability
     assert "preflight CHANGE --for-commit" in readme
     assert "git push" in agents
     assert "git push" in readme

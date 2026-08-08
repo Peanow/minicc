@@ -26,17 +26,18 @@ and tracing behavior measurable.
 
 - `AGENTS.md` is the only project-level AI workflow entry point; do not add a
   project `.agents/skills/` directory or depend on a project skill file.
-- Before implementing a change, run `python scripts/spec.py status` and conduct
-  a dialogue-based Explore for public behavior, APIs, Trace schemas,
-  permissions, concurrency, tools, context, memory, sessions, or Terminal UX.
-  Explore must record current-state evidence, the goal, scope, proposed
-  approach, affected files, test strategy, risks, and unresolved questions.
-- The AI must use the built-in ask-user confirmation step after presenting the
-  initial Explore plan. The choices are `确认并继续`, `需要调整计划`, and
-  `暂不实施`. Revise the plan before creating a change or implementing when
-  the user requests adjustments; do not create a change or implement before
-  confirmation. Spelling, documentation-only, and test-data-only edits may
-  skip Explore when they do not alter a contract.
+- Before implementing a change, run `python scripts/spec.py status`. The user
+  decides whether to work in plan mode; plan mode is optional. When plan mode
+  is selected for public behavior, APIs, Trace schemas, permissions,
+  concurrency, tools, context, memory, sessions, or Terminal UX, record
+  current-state evidence, the goal, scope, proposed approach, affected files,
+  test strategy, risks, and unresolved questions before implementation.
+- If the user does not select plan mode, proceed with the same SDD documents
+  and verification requirements without an additional planning confirmation
+  step. If the user requests adjustments while planning, incorporate them
+  before implementation. Spelling, documentation-only, and test-data-only
+  edits may still skip a change specification when they do not alter a
+  contract.
 - Keep `spec.md`, `tasks.md`, and `checklist.md` traceable as
   `Requirement -> Acceptance Scenario -> Task -> pytest -> Trace assertion`.
 - During implementation, keep tasks and evidence current. Every new runtime
@@ -57,9 +58,9 @@ validation evidence and request explicit confirmation before running
 the user confirms and the change is archived, run
 `python scripts/spec.py preflight CHANGE --for-commit`. When it is
 strict-clean, show the archived status, intended files, diff summary, and
-verification evidence, then request explicit confirmation before staging and
-running `git commit`. A commit flow never includes `git push`. A user request
-to commit does not bypass either confirmation gate.
+verification evidence. An explicit user request to commit authorizes staging
+the intended files and running `git commit`; do not ask for a redundant
+confirmation. A commit flow never includes `git push`.
 
 Do not run `git commit`, `git commit --amend`, or `git push` without explicit
 user authorization. Do not delete or overwrite important data without
