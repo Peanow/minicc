@@ -6,3 +6,6 @@
   project-isolated, and never restore permission mode or credentials.
 - Interactive turns persist complete successful checkpoints. Non-interactive
   runs are ephemeral unless `--save-session` is supplied.
+- Interactive resume restores the checkpointed messages and displays the full
+  persisted conversation in terminal scrollback; `/resume [ID]` selects the
+  latest or a named project-local session.

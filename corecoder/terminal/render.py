@@ -89,6 +89,34 @@ class NormalizedEvent:
         }
 
 
+def render_session_messages(console: Console, session: Any) -> None:
+    """Render every persisted message without putting it in the input buffer."""
+
+    session_id = str(getattr(session, "id", "session"))
+    messages = list(getattr(session, "messages", []) or [])
+    console.print(
+        Text(
+            f"Session {session_id} · restored conversation ({len(messages)} messages)",
+            style="bold green",
+        )
+    )
+    if not messages:
+        console.print(Text("(conversation is empty)", style="dim"))
+        return
+
+    for index, message in enumerate(messages, 1):
+        payload = dict(message) if isinstance(message, dict) else {"content": message}
+        role = str(payload.pop("role", "unknown"))
+        console.print(Text(f"[{index}] {role}", style="bold cyan"))
+        if set(payload) == {"content"} and isinstance(payload["content"], str):
+            body = payload["content"]
+        else:
+            body = json.dumps(payload, ensure_ascii=False, indent=2, default=str)
+        console.print(Text(body, overflow="fold"), markup=False)
+        if index != len(messages):
+            console.print()
+
+
 def result_data(result: Any) -> dict[str, Any]:
     if hasattr(result, "to_dict"):
         raw = result.to_dict()

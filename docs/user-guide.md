@@ -109,6 +109,7 @@ corecoder --ephemeral
 ```text
 /help       查看帮助和快捷键
 /clear      清空当前对话
+/resume     恢复最近一次 session；可追加 session ID
 /model      查看或切换模型
 /tokens     查看 token 和费用
 /compact    手动压缩上下文
@@ -123,6 +124,10 @@ corecoder --ephemeral
 /verbose    切换详细工具输出
 /exit       退出
 ```
+
+`/resume` 无参数时恢复当前项目最近一次 session，`/resume SESSION_ID`
+恢复指定 session；恢复后会在终端滚动区显示完整的历史消息。原有的
+`/session resume SESSION_ID` 仍然可用。
 
 命令、模型、Skill、session ID 和文件路径均支持补全。未知 slash command
 只显示建议，不会发送给模型。

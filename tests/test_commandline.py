@@ -1,6 +1,7 @@
 import io
 import json
 from argparse import Namespace
+from types import SimpleNamespace
 
 import pytest
 
@@ -136,3 +137,54 @@ def test_runtime_adapter_consumes_agent_observer_api(tmp_path):
     ]
     assert result.final_answer == "hello"
     assert result.token.total == 5
+
+
+def test_interactive_resume_passes_loaded_record_to_terminal(monkeypatch):
+    from corecoder.commandline import handlers
+    from corecoder.session import SessionRecord
+
+    record = SessionRecord(
+        id="latest",
+        project_id="project",
+        created_at="2026-08-08T00:00:00Z",
+        updated_at="2026-08-08T00:01:00Z",
+        model="model",
+        context_strategy="hybrid",
+        messages=[{"role": "user", "content": "saved"}],
+    )
+
+    class Sessions:
+        def latest(self):
+            return record
+
+        def restore(self, agent, loaded):
+            assert loaded is record
+
+    bundle = SimpleNamespace(
+        agent=object(),
+        sessions=Sessions(),
+        config=SimpleNamespace(model="model"),
+        close=lambda: None,
+    )
+    observed = {}
+
+    monkeypatch.setattr(handlers, "build_runtime", lambda *args, **kwargs: bundle)
+
+    class FakeTerminalApp:
+        def __init__(self, _bundle, *, initial_session, **_kwargs):
+            observed["initial_session"] = initial_session
+
+        def run(self):
+            return 0
+
+    monkeypatch.setattr(handlers, "TerminalApp", FakeTerminalApp)
+
+    result = handlers.run_interactive(
+        Namespace(ephemeral=False),
+        stdout=io.StringIO(),
+        stderr=io.StringIO(),
+        continue_latest=True,
+    )
+
+    assert result == 0
+    assert observed["initial_session"] is record

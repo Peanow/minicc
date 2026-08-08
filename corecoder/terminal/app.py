@@ -21,11 +21,17 @@ from corecoder.commandline.runtime import (
     start_agent_session,
     status_from_agent,
 )
-from corecoder.session import SessionError
+from corecoder.session import SessionError, SessionRecord
 
 from .commands import CommandRegistry, default_registry
 from .prompt import PromptState, create_prompt_session
-from .render import EventRenderer, NormalizedEvent, OutputMode, result_data
+from .render import (
+    EventRenderer,
+    NormalizedEvent,
+    OutputMode,
+    render_session_messages,
+    result_data,
+)
 
 
 class TerminalApp:
@@ -38,6 +44,7 @@ class TerminalApp:
         console: Console | None = None,
         registry: CommandRegistry | None = None,
         prompt_session: Any | None = None,
+        initial_session: SessionRecord | None = None,
     ):
         self.bundle = bundle
         self.agent = bundle.agent
@@ -48,6 +55,7 @@ class TerminalApp:
         self._exit_requested = False
         self._diff_journal: list[tuple[str, str]] = []
         self.last_result: Any | None = None
+        self._initial_session = initial_session
         self.state = PromptState(
             model=bundle.config.model,
             permission_mode=bundle.config.permission_mode,
@@ -65,6 +73,9 @@ class TerminalApp:
 
     def run(self) -> int:
         self._show_banner()
+        if self._initial_session is not None:
+            self._show_resumed_session(self._initial_session)
+            self._initial_session = None
         start_message = start_agent_session(self.agent)
         if start_message:
             self.console.print(f"[dim]{start_message}[/dim]")
@@ -159,17 +170,31 @@ class TerminalApp:
         for path in changed:
             self.console.print(f"  [cyan]{path}[/cyan]")
 
-    def resume_session(self, session_id: str) -> None:
+    def resume_session(self, session_id: str | None = None) -> None:
         try:
-            record = self.bundle.sessions.load(session_id)
+            record = (
+                self.bundle.sessions.latest()
+                if session_id is None
+                else self.bundle.sessions.load(session_id)
+            )
             self.bundle.sessions.restore(self.agent, record)
         except SessionError as exc:
             raise ValueError(str(exc)) from exc
         self.bundle.config.model = record.model
         self.state.model = record.model
-        self.console.print(
-            f"[green]Resumed {record.id}[/green] · model {record.model}"
-        )
+        self._show_resumed_session(record)
+
+    def _show_resumed_session(self, record: SessionRecord) -> None:
+        render_session_messages(self.console, record)
+        trace = getattr(self.agent, "trace", None)
+        emit = getattr(trace, "emit", None)
+        if callable(emit):
+            emit(
+                "session_resumed",
+                session_id=record.id,
+                message_count=len(record.messages),
+                model=record.model,
+            )
 
     def open_editor(self) -> None:
         editor = os.getenv("VISUAL") or os.getenv("EDITOR")

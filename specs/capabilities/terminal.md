@@ -5,6 +5,8 @@
   slash escaping.
 - The command registry owns help, aliases, argument errors, and completion for
   the documented slash commands.
+- `/resume [ID]` restores the latest or named session and renders all persisted
+  messages in terminal scrollback without filling the editable prompt buffer.
 - Rich renders model streaming, tool status, approval cards, and structured
   diffs; plain and JSONL adapters keep stdout/stderr deterministic.
 - Interactive approval uses a prompt-toolkit selector with numbered choices,

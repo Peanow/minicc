@@ -64,6 +64,8 @@ class SlashCompleter(Completer):
             return
         command_name, argument = text[1:].split(" ", 1)
         source_name = command_name
+        if command_name == "resume":
+            source_name = "session"
         if command_name == "session":
             words = argument.split()
             if not words or (len(words) == 1 and not argument.endswith(" ")):

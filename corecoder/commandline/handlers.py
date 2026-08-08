@@ -196,7 +196,11 @@ def run_interactive(
             except SessionError as exc:
                 Console(file=stderr).print(f"[red]Session error:[/red] {exc}")
                 return 1
-        return TerminalApp(bundle, console=console).run()
+        return TerminalApp(
+            bundle,
+            console=console,
+            initial_session=record if resume_id or continue_latest else None,
+        ).run()
     except KeyboardInterrupt:
         console.print("[yellow]Interrupted.[/yellow]")
         return 130

@@ -31,7 +31,7 @@ class TerminalContext(Protocol):
     def console(self): ...
     def request_exit(self) -> None: ...
     def show_diff(self) -> None: ...
-    def resume_session(self, session_id: str) -> None: ...
+    def resume_session(self, session_id: str | None = None) -> None: ...
     def open_editor(self) -> None: ...
     def observe(self) -> None: ...
     def set_verbose(self, value: bool) -> None: ...
@@ -136,6 +136,11 @@ def _clear(context: TerminalContext, args: list[str]) -> None:
     _require_at_most(args, 0)
     clear_agent(context.agent)
     context.console.print("[green]Conversation cleared.[/green]")
+
+
+def _resume(context: TerminalContext, args: list[str]) -> None:
+    _require_at_most(args, 1)
+    context.resume_session(args[0] if args else None)
 
 
 def _model(context: TerminalContext, args: list[str]) -> None:
@@ -327,6 +332,7 @@ def default_registry() -> CommandRegistry:
     for command in (
         Command("help", "show command and input help", _help),
         Command("clear", "clear conversation context", _clear),
+        Command("resume", "resume the latest or a named session", _resume, "[ID]"),
         Command("model", "show or switch the active model", _model, "[NAME]"),
         Command("tokens", "show token and cost totals", _tokens),
         Command("compact", "compact conversation context", _compact),
