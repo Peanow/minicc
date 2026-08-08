@@ -228,6 +228,18 @@ def test_empty_config_no_hooks():
         assert result.message == ""
 
 
+def test_memory_hook_symbols_remain_compatible():
+    """Memory hook names remain available for direct host integrations."""
+    assert HookEvent.MemorySave.value == "MemorySave"
+    assert HookEvent.MemoryInject.value == "MemoryInject"
+    for event in (HookEvent.MemorySave, HookEvent.MemoryInject):
+        cfg = HookConfig(hooks={
+            event: [HookMatcher(command="echo $CORECODER_HOOK_EVENT")],
+        })
+        result = cfg.run(event)
+        assert result.message == event.value
+
+
 # ---------------------------------------------------------------------------
 # load_hooks — file loading
 # ---------------------------------------------------------------------------

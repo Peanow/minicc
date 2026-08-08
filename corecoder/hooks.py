@@ -7,8 +7,12 @@ distilled to 6 core events:
     PreToolUse   — before a tool executes (can block or modify args)
     PostToolUse  — after a tool executes (can modify output)
     Stop          — before the agent returns its final response
-    MemorySave   — session ends, extract and persist memories
-    MemoryInject — session starts, inject relevant memories
+    MemorySave   — compatibility event for explicit host integrations
+    MemoryInject — compatibility event for explicit host integrations
+
+The default Agent lifecycle does not dispatch MemorySave or MemoryInject.
+Hosts that need either behavior may still register callbacks or invoke the
+hook configuration directly.
 
 Hooks come in two flavors:
 

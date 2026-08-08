@@ -16,3 +16,9 @@
   `--sandbox-network` configure the Bash OS boundary. Missing sandbox backends
   fail closed; direct Python/subprocess calls outside Agent tools remain
   outside this boundary.
+- Cross-session memory is explicit: the default Agent neither searches memory
+  before a task nor saves conversation observations on close. The
+  `memory_search` and `memory_save` tools, `/memory` commands, direct
+  `MemoryService` APIs, and the lightweight memory directory remain
+  available. `--ephemeral` disables memory persistence and read-only policy
+  denies memory writes.

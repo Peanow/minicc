@@ -526,7 +526,8 @@ def format_memory_directory(titles: list[dict]) -> str:
     lines = [
         "# Memory",
         f"You have {len(titles)} memory item(s) from previous sessions. "
-        "Use the `memory_search` tool to retrieve relevant ones when needed.",
+        "Use the `memory_search` tool to retrieve relevant ones when needed. "
+        "Use `memory_save` only when information has value across sessions.",
     ]
     for t in titles[:10]:
         lines.append(f"- [{t['type']}] {t['title']}")

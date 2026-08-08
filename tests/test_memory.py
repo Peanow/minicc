@@ -482,40 +482,251 @@ def test_agent_has_memory_directory():
     agent = Agent(llm=llm)
     assert agent._project != ""
     assert isinstance(agent._memory_dir, str)
-    assert not agent._memory_injected
 
 
-def test_agent_on_demand_injection(tmp_path, monkeypatch):
-    """First chat() triggers semantic memory injection."""
+class _CapturingLLM:
+    model = "test"
+    estimated_cost = None
+
+    def __init__(self):
+        from corecoder.llm import LLMResponse
+
+        self.calls = []
+        self.response = LLMResponse(content="done", prompt_tokens=1, completion_tokens=1)
+        self.total_prompt_tokens = 0
+        self.total_completion_tokens = 0
+
+    def chat(self, **kwargs):
+        self.calls.append(kwargs)
+        self.total_prompt_tokens += self.response.prompt_tokens
+        self.total_completion_tokens += self.response.completion_tokens
+        return self.response
+
+
+class _SequenceLLM:
+    model = "test"
+    estimated_cost = None
+
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.calls = []
+        self.total_prompt_tokens = 0
+        self.total_completion_tokens = 0
+
+    def chat(self, **kwargs):
+        self.calls.append(kwargs)
+        response = self.responses.pop(0)
+        self.total_prompt_tokens += response.prompt_tokens
+        self.total_completion_tokens += response.completion_tokens
+        return response
+
+
+class _SpyMemoryService:
+    def __init__(self, tmp_path):
+        from corecoder.embedding import EmbeddingService
+
+        self.db_path = tmp_path / "memory.db"
+        self.enabled = True
+        self.writable = True
+        self.embedding = EmbeddingService(provider="none")
+        self.search_calls = 0
+        self.save_conversation_calls = 0
+
+    def recent_titles(self, limit=20):
+        return [{"id": 1, "type": "decision", "title": "Historical decision"}]
+
+    def search(self, query, limit=10):
+        self.search_calls += 1
+        return []
+
+    def save_conversation(self, messages):
+        self.save_conversation_calls += 1
+        return 1
+
+    def close(self):
+        return None
+
+
+def test_agent_does_not_auto_search_or_inject_memory(tmp_path):
+    """A first task leaves historical retrieval to an explicit tool call."""
     from corecoder.agent import Agent
-    from corecoder.llm import LLM
-    from corecoder.memory import MemoryStore
-    import corecoder.memory as memory_module
+    from corecoder.paths import AppPaths
+    from corecoder.trace import InMemoryTraceSink
 
-    monkeypatch.setattr(memory_module, "_MEMORY_DIR", tmp_path / "memory")
+    llm = _CapturingLLM()
+    memory = _SpyMemoryService(tmp_path)
+    trace = InMemoryTraceSink()
+    agent = Agent(
+        llm=llm,
+        tools=[],
+        workspace=tmp_path,
+        app_paths=AppPaths(tmp_path / "state"),
+        memory_service=memory,
+        trace=trace,
+    )
 
-    llm = LLM(model="test", api_key="test")
-    agent = Agent(llm=llm, embedding=None)
-    assert not agent._memory_injected
+    agent.run("work on the current task")
 
-    # save some memory for the project
-    store = MemoryStore()
-    try:
-        import uuid
-        unique = uuid.uuid4().hex[:8]
-        store.save(Observation(
-            project=agent._project,
-            title=f"Test {unique}",
-            content=f"Test content {unique}",
-        ))
-    finally:
-        store.close()
+    assert memory.search_calls == 0
+    sent = llm.calls[0]["messages"]
+    assert len([message for message in sent if message["role"] == "system"]) == 1
+    assert "Relevant memories" not in "\n".join(
+        str(message.get("content", "")) for message in sent
+    )
+    assert not any(
+        event["event"] == "memory_failed" and event["data"].get("operation") == "search"
+        for event in trace.events
+    )
 
-    # After _inject_relevant_memory, flag should be set
-    # (can't easily test the full chat() without a real LLM, but test the method)
-    agent.messages = []
-    agent._inject_relevant_memory("test query")
-    assert agent._memory_injected
+
+def test_agent_close_does_not_auto_save_memory(tmp_path):
+    """Closing an Agent does not persist conversation-derived observations."""
+    from corecoder.agent import Agent
+    from corecoder.paths import AppPaths
+    from corecoder.trace import InMemoryTraceSink
+
+    memory = _SpyMemoryService(tmp_path)
+    trace = InMemoryTraceSink()
+    agent = Agent(
+        llm=_CapturingLLM(),
+        tools=[],
+        workspace=tmp_path,
+        app_paths=AppPaths(tmp_path / "state"),
+        memory_service=memory,
+        trace=trace,
+    )
+    agent.messages.append({"role": "user", "content": "a conversation"})
+    agent.close()
+
+    assert memory.save_conversation_calls == 0
+    assert not (tmp_path / "memory.db").exists()
+    assert not any(event["event"] == "memory_written" for event in trace.events)
+    assert not any(event["event"] == "memory_failed" for event in trace.events)
+
+    empty_memory = _SpyMemoryService(tmp_path / "empty")
+    empty_agent = Agent(
+        llm=_CapturingLLM(),
+        tools=[],
+        workspace=tmp_path / "empty",
+        app_paths=AppPaths(tmp_path / "empty-state"),
+        memory_service=empty_memory,
+        trace=InMemoryTraceSink(),
+    )
+    empty_agent.close()
+    assert empty_memory.save_conversation_calls == 0
+    assert not empty_memory.db_path.exists()
+
+
+def test_explicit_memory_tools_keep_schema_and_effects(tmp_path):
+    """Explicit save/search remain available across Agent instances."""
+    from corecoder.agent import Agent
+    from corecoder.embedding import EmbeddingService
+    from corecoder.llm import LLMResponse, ToolCall
+    from corecoder.memory_service import MemoryService
+    from corecoder.paths import AppPaths
+    from corecoder.policy import ExecutionPolicy, PermissionMode
+    from corecoder.tools import build_default_tools
+    from corecoder.tools.base import Effect, ToolStatus
+    from corecoder.trace import InMemoryTraceSink
+
+    db_path = tmp_path / "shared-memory.db"
+    service_a = MemoryService(
+        db_path=db_path,
+        project_id="shared/project",
+        embedding=EmbeddingService(provider="none"),
+    )
+    trace = InMemoryTraceSink()
+    agent_a = Agent(
+        llm=_SequenceLLM([
+            LLMResponse(
+                tool_calls=[ToolCall(
+                    id="save-1",
+                    name="memory_save",
+                    arguments={
+                        "title": "Decision",
+                        "content": "Use explicit memory",
+                    },
+                )],
+                prompt_tokens=1,
+                completion_tokens=1,
+            ),
+            LLMResponse(content="saved", prompt_tokens=1, completion_tokens=1),
+        ]),
+        tools=build_default_tools(tmp_path),
+        workspace=tmp_path,
+        app_paths=AppPaths(tmp_path / "state-a"),
+        memory_service=service_a,
+        trace=trace,
+    )
+    save_tool = agent_a.tool_registry.get("memory_save")
+    search_tool = agent_a.tool_registry.get("memory_search")
+    assert save_tool.schema()["function"]["parameters"] == save_tool.parameters
+    assert search_tool.schema()["function"]["parameters"] == search_tool.parameters
+    assert save_tool.parameters["required"] == ["title", "content"]
+    assert search_tool.parameters["required"] == ["query"]
+    assert save_tool.effects == frozenset({Effect.APP_STATE_WRITE})
+    assert search_tool.effects == frozenset({Effect.READ_FS})
+    assert ExecutionPolicy(PermissionMode.WORKSPACE_WRITE).evaluate(
+        save_tool, {"title": "Decision", "content": "Use explicit memory"}
+    ).decision.value == "allow"
+
+    result = agent_a.run("save this explicit decision")
+    assert result.status == "completed"
+    assert any(
+        event["event"] == "tool_started"
+        and event["data"].get("tool") == "memory_save"
+        for event in trace.events
+    )
+    assert any(
+        event["event"] == "tool_finished"
+        and event["data"].get("tool") == "memory_save"
+        and event["data"].get("status") == ToolStatus.SUCCESS.value
+        for event in trace.events
+    )
+    agent_a.close()
+
+    service_b = MemoryService(
+        db_path=db_path,
+        project_id="shared/project",
+        embedding=EmbeddingService(provider="none"),
+    )
+    agent_b = Agent(
+        llm=_CapturingLLM(),
+        tools=build_default_tools(tmp_path),
+        workspace=tmp_path,
+        app_paths=AppPaths(tmp_path / "state-b"),
+        memory_service=service_b,
+    )
+    found = agent_b.tool_registry.get("memory_search").execute(query="explicit memory")
+    assert found.status is ToolStatus.SUCCESS
+    assert "Decision" in found.content
+    agent_b.close()
+
+
+def test_memory_slash_commands_remain_explicit(tmp_path):
+    from types import SimpleNamespace
+
+    from corecoder.embedding import EmbeddingService
+    from corecoder.memory_service import MemoryService
+    from corecoder.terminal.commands import default_registry
+    from rich.console import Console
+    import io
+
+    service = MemoryService(
+        db_path=tmp_path / "slash-memory.db",
+        project_id="slash/project",
+        embedding=EmbeddingService(provider="none"),
+    )
+    output = io.StringIO()
+    context = SimpleNamespace(
+        agent=SimpleNamespace(memory=service),
+        console=Console(file=output, color_system=None),
+    )
+
+    assert default_registry().dispatch("/memory save Keep this explicitly", context)
+    assert service.search("explicitly")
+    assert "(1, False)" in output.getvalue()
+    service.close()
 
 
 def test_system_prompt_with_memory_directory():
@@ -534,6 +745,85 @@ def test_system_prompt_no_memory():
 
     prompt = system_prompt(build_default_tools(), memory_context="")
     assert "Memory" not in prompt
+
+
+def test_memory_directory_and_runtime_modes_remain_compatible(tmp_path):
+    from corecoder.agent import Agent
+    from corecoder.embedding import EmbeddingService
+    from corecoder.memory_service import MemoryService
+    from corecoder.paths import AppPaths
+    from corecoder.policy import ExecutionPolicy, PermissionMode
+    from corecoder.tools import build_default_tools
+    from corecoder.tools.base import ToolStatus
+    from corecoder.trace import InMemoryTraceSink
+
+    db_path = tmp_path / "modes.db"
+    writable = MemoryService(
+        db_path=db_path,
+        project_id="modes/project",
+        embedding=EmbeddingService(provider="none"),
+    )
+    writable.save("Persisted title", "Persisted content")
+    trace = InMemoryTraceSink()
+    agent = Agent(
+        llm=_CapturingLLM(),
+        tools=build_default_tools(tmp_path),
+        workspace=tmp_path,
+        app_paths=AppPaths(tmp_path / "state"),
+        memory_service=writable,
+        trace=trace,
+    )
+    assert "memory_search" in agent._memory_dir
+    assert "memory_save" in agent._memory_dir
+    assert "Persisted title" in agent._memory_dir
+    assert "Relevant memories" not in agent._system
+    agent.close()
+    assert not any(
+        event["event"] in {"memory_written", "memory_failed"}
+        for event in trace.events
+    )
+
+    read_only = Agent(
+        llm=_CapturingLLM(),
+        tools=build_default_tools(tmp_path),
+        workspace=tmp_path,
+        app_paths=AppPaths(tmp_path / "readonly-state"),
+        memory_service=MemoryService(
+            db_path=db_path,
+            project_id="modes/project",
+            embedding=EmbeddingService(provider="none"),
+        ),
+        ephemeral=False,
+        policy=ExecutionPolicy(
+            PermissionMode.READ_ONLY, workspace=tmp_path
+        ),
+    )
+    denied = read_only.tool_registry.get("memory_save").execute(
+        title="Denied", content="Should remain read only"
+    )
+    assert denied.status is ToolStatus.ERROR
+    assert read_only.tool_registry.get("memory_search").execute(query="Persisted").status is ToolStatus.SUCCESS
+    read_only.close()
+
+    ephemeral_db = tmp_path / "ephemeral.db"
+    ephemeral = Agent(
+        llm=_CapturingLLM(),
+        tools=build_default_tools(tmp_path),
+        workspace=tmp_path,
+        app_paths=AppPaths(tmp_path / "ephemeral-state"),
+        memory_service=MemoryService(
+            db_path=ephemeral_db,
+            project_id="modes/project",
+            embedding=EmbeddingService(provider="none"),
+        ),
+        ephemeral=True,
+    )
+    assert ephemeral.memory_service.enabled is False
+    assert ephemeral.tool_registry.get("memory_save").execute(
+        title="No", content="Persistence"
+    ).status is ToolStatus.ERROR
+    ephemeral.close()
+    assert not ephemeral_db.exists()
 
 
 # ---------------------------------------------------------------------------
